@@ -7,6 +7,8 @@ emc2 (1:2.3.5) hardy; urgency=low
   * stepconf: fix direction of 2nd and 3rd parports
   * configs: add smithy 516 sample configuration
   * image2gcode: respect current TLO and fixture settings
+  * image2gcode: fix an error when "Extend Image Border" was chosen with a
+    non-square input image (SF#2947390)
   * documentation improvements
   * hostmot2: Accept "idrom v3" firmwares.  these are the firmwares that
     will be released with emc 2.4.x.
