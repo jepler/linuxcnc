@@ -118,6 +118,9 @@ int upci_open_region(int devnum, int region_num);
 */
 void upci_close_region(int region_descriptor);
 
+/* 'upci_get_read_addr' returns a pointer within a memory region */
+volatile void *upci_get_read_addr(int rd, __u32 offset);
+
 /* 'upci_read_xx' reads data from a previously opened region on a PCI
    card.  It takes a region descriptor and an offset, and returns the
    data.  'xx' can be u8, s8, u16, s16, u32, s32.  The region can be

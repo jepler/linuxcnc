@@ -361,7 +361,7 @@ void bitfile_print_chunk(struct bitfile *bf, char tag, char *title)
 
     ch = bitfile_find_chunk(bf, tag, 0);
     if ( ch != NULL ) {
-	printf("%s%s\n", title, ch->body);
+	fprintf(stderr, "%s%s\n", title, ch->body);
     }
 }
 
@@ -389,7 +389,7 @@ void bitfile_print_xilinx_info(struct bitfile *bf)
     bitfile_print_chunk(bf, 'd', "Design time:     ");
     ch = bitfile_find_chunk(bf, 'e', 0);
     if ( ch != NULL ) {
-	printf ( "Bitstream size:  %d\n", ch->len );
+	fprintf ( stderr, "Bitstream size:  %d\n", ch->len );
     }
 }
 

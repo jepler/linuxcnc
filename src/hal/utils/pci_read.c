@@ -35,7 +35,7 @@
 
 /* define DEBUG_PRINTS to print info about command line parameters,
    the detected board, etc. */
-#undef DEBUG_PRINTS
+#define DEBUG_PRINTS
 
 #define array_size(x) (sizeof(x)/sizeof(x[0]))
 
@@ -77,7 +77,7 @@ static struct read_var params[] =
 	{
 	{&cardnum, 0, 15, "cardnum", "Card Number"},
 	{&cardtype, 0, array_size(board_info_table), "cardtype", "Card Type"},
-	{&pci_region, 0, 3, "region", "PCI Region"},
+	{&pci_region, 0, 5, "region", "PCI Region"},
 	{&pci_offset, 0, 65532, "offset", "Region Offset"},
 	};
 
@@ -138,9 +138,9 @@ int main(int argc, char *argv[])
 #ifdef DEBUG_PRINTS
     upci_print_device_info(board.upci_devnum);
 #else
+#endif
     data_region = upci_open_region(board.upci_devnum, pci_region);
     value = upci_read_u32(data_region, pci_offset);
-#endif
     printf("0x%08X\n", value);
     return EC_OK;
 }
@@ -192,8 +192,10 @@ static int parse_cmdline(unsigned argc, char *argv[])
 		}
 		if (params[i].minval != params[i].maxval) {
 				if ((temp < params[i].minval) || (temp > params[i].maxval)) {
-					errmsg(__func__,"Parameter %s out of range: %u",
-						params[i].longname, temp);
+					errmsg(__func__,"Parameter %s out of range: %u [%u:%u]",
+						params[i].longname, temp,
+						params[i].minval,
+						params[i].maxval);
 					return EC_BADCL;
 				}
 		}

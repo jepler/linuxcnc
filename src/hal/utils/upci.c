@@ -292,19 +292,19 @@ int upci_print_device_info(int devnum)
 	return -1;
     }
     dev = &(devices[devnum]->p);
-    printf("PCI device %2d at bus/device/function %02x/%02x/%01x\n",
+    fprintf(stderr, "PCI device %2d at bus/device/function %02x/%02x/%01x\n",
 	devnum, dev->bus, dev->dev, dev->func );
-    printf("Vendor/Device/SSVendor/SSDevice: %04x/%04x/%04x/%04x\n",
+    fprintf(stderr, "Vendor/Device/SSVendor/SSDevice: %04x/%04x/%04x/%04x\n",
 	dev->vendor_id, dev->device_id, dev->ss_vendor_id, dev->ss_device_id );
     for ( n = 0 ; n < 6 ; n++ ) {
 	if ( dev->size[n] > 0 ) {
 	    if ( dev->region_type[n] == UPCI_REG_IO ) {
 		/* I/O region */
-		printf("Region %d: I/O %u bytes at %04x\n",
+		fprintf(stderr, "Region %d: I/O %u bytes at %04x\n",
 		    n, dev->size[n], dev->base_addr[n] );
 	    } else {
 		/* memory region */
-		printf("Region %d: MEM %u bytes at %08x\n",
+		fprintf(stderr, "Region %d: MEM %u bytes at %08x\n",
 		    n, dev->size[n], dev->base_addr[n] );
 	    }
 	}
@@ -587,6 +587,21 @@ __s16 upci_read_s16(int rd, __u32 offset)
 	data = *ptr;
     }
     return data;
+}
+
+volatile void *upci_get_read_addr(int rd, __u32 offset)
+{
+    struct region_info *reg;
+
+    /* test for out of range, not mapped, or offset beyond end of region */
+    if ((rd < 0 ) || ( rd >= MAX_REGIONS ) ||
+	( (reg = regions[rd]) == NULL ) || ( offset > reg->size )) return 0;
+    /* get the data */
+    if ( reg->type == UPCI_REG_IO ) {
+        return 0;
+    } else {
+        return (void *)(reg->mapped_ptr + offset);
+    }
 }
 
 __u32 upci_read_u32(int rd, __u32 offset)
