@@ -710,6 +710,9 @@ endif
 obj-m += scope_rt.o
 scope_rt-objs := hal/utils/scope_rt.o $(MATHSTUB)
 
+obj-m += scope2rt.o
+scope2rt-objs := hal/utils/scope2rt.o $(MATHSTUB)
+
 obj-m += hal_lib.o
 hal_lib-objs := hal/hal_lib.o $(MATHSTUB)
 
@@ -850,6 +853,7 @@ endif
 ../rtlib/hal_speaker$(MODULE_EXT): $(addprefix objects/rt,$(hal_speaker-objs))
 ../rtlib/opto_ac5$(MODULE_EXT): $(addprefix objects/rt,$(opto_ac5-objs))
 ../rtlib/scope_rt$(MODULE_EXT): $(addprefix objects/rt,$(scope_rt-objs))
+../rtlib/scope2rt$(MODULE_EXT): $(addprefix objects/rt,$(scope2rt-objs))
 ../rtlib/hal_lib$(MODULE_EXT): $(addprefix objects/rt,$(hal_lib-objs))
 ../rtlib/motmod$(MODULE_EXT): $(addprefix objects/rt,$(motmod-objs))
 ../rtlib/trivkins$(MODULE_EXT): $(addprefix objects/rt,$(trivkins-objs))
