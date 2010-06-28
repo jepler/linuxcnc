@@ -114,3 +114,12 @@ TARGETS += ../bin/comp
 objects/%.py: %.g ../bin/yapps
 	@mkdir -p $(dir $@)
 	../bin/yapps $< $@
+
+SCOPEMODULESRCS := hal/utils/scope2module.c
+PYSRCS += $(SCOPEMODULESRCS)
+
+SCOPEMODULE := ../lib/python/scope2.so
+$(SCOPEMODULE): $(call TOOBJS, $(SCOPEMODULESRCS)) $(HALLIB)
+	$(ECHO) Linking python module $(notdir $@)
+	$(CXX) $(LDFLAGS) -shared -o $@ $^
+PYTARGETS += $(SCOPEMODULE)
