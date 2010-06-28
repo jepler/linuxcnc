@@ -1,0 +1,69 @@
+The shortcomings of halscope
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+At CNC Workshop 2010 we discussed some of the shortcomings of halscope.
+Here's my own interpretation of the shortcomings we identified:
+ * Tight coupling between the capture and display logic gives poor
+   flexibility
+ * The existing GUI, coded in C, is not quick to modify
+ * For these reasons, there are desired features that are hard to add
+   * save and reload stored traces, including display of traces from
+     different sessions together
+   * perform math on traces to give new traces
+     (e.g., xvel=derivative(xpos), xyvel=hypot(xvel,yvel))
+   * trigger on complex conditions
+     (e.g., abs(pos-cmd)>eps, glitch_detect(sw1))
+   * special purpose analysis (e.g., FFT analysis of motor response)
+
+While John Kasunich is investigating incremental improvements to the
+existing halscope, I have chosen to look into a new design which I hope
+will make these desired features easier to implement.
+
+
+The lessons of halsampler
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Halsampler shows that under normal conditions it is possible to capture
+unbounded amounts of data from realtime with a very modest requirement
+for shared memory.
+
+
+The design of scope2
+~~~~~~~~~~~~~~~~~~~~
+
+Like halscope, scope2 consists of a real-time part which captures
+samples and a userspace part which retrieves and operates on samples.
+
+Like halscope, an arbitrary limit is imposed on the number of captured
+channels.  This limit can be raised by changing a compile-time constant.
+
+Like halsampler, the communication is through a ring buffer which the
+userspace portion must read frequently enough that it never fills.
+Experimentation may be necessary to determine the appropriate buffer
+size, and for extreme situations the buffer size can be set when
+scope2rt is loaded.
+
+Unlike halscope, there is no triggering logic in scope2rt.  Instead,
+userspace will examine all samples to see whether they meet the trigger
+condition.  This eases implementation of complex triggers, since
+they do not have to always run without floating-point arithmetic
+and because a generic expression evaluator can be used.
+
+Unlike halscope, there is no fixed capture size.  As long as userspace
+can keep up with reading samples from the ring buffer, an unlimited
+number of samples before and after a trigger can be retained in
+userspace.
+
+Unlike halscope, the primary userspace gui will be written in Python.
+The python module scope2 will allow special-purpose trace analysis
+programs to be written.  (One such special-purpose program suggested at
+Workshop is an FFT-based analysis of a PID loop which would indicate
+where a notch filter could be applied to improve motor response)
+
+
+The state of the code
+~~~~~~~~~~~~~~~~~~~~~
+
+At this time, scope2rt and scope2module are implemented and very lightly
+tested.  An example program, scopedemo.py, captures 10 samples of data
+on two channels and prints them to the terminal.
