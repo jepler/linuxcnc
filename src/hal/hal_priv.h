@@ -124,6 +124,7 @@ typedef union {
     hal_s32_t s;
     hal_u32_t u;
     hal_float_t f;
+    volatile ireal_t fi;
 } hal_data_u;
 
 /** HAL "list element" data structure.
