@@ -1,0 +1,14 @@
+loadrt scope2rt
+loadrt threads
+loadrt siggen
+loadrt charge_pump
+
+addf siggen.0.update thread1
+addf charge-pump thread1
+
+setp charge-pump.enable 1
+
+start
+
+#loadusr -w gdb --args python scopedemo.py
+loadusr -w python scopedemo.py
