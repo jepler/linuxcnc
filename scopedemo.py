@@ -120,13 +120,6 @@ class Trace:
 	    self._cache = " ".join(data)
 	return self._cache
 
-def trace2path(parent, points, xo, xs, yo, ys, **kw):
-    t = Trace(points, xs, ys)
-    data = t.get_pathdata()
-    print data[:76]+"..."
-    r = goocanvas.Path(parent=parent, data=data, **kw)
-    r.translate(xo,yo)
-    return r
 
 cap = Capture()
 t1 = Trace([], 2, 20); cap.add_pin(t1, 'charge-pump.out')
