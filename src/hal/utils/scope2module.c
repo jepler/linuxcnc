@@ -369,6 +369,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
     self->hal_id = hal_init(name);
     if(self->hal_id <= 0) {
 	errno = -self->hal_id;
+	self->hal_id = 0;
 	PyErr_SetFromErrno(PyExc_RuntimeError);
 	return -1;
     }
@@ -379,6 +380,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
 	errno = -res;
 	PyErr_SetFromErrno(PyExc_RuntimeError);
 	hal_exit(self->hal_id);
+	self->hal_id = 0;
 	return -1;
     }
 
@@ -388,6 +390,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
 	PyErr_SetFromErrno(PyExc_RuntimeError);
 	rtapi_shmem_delete(self->shm_id, self->hal_id);
 	hal_exit(self->hal_id);
+	self->hal_id = 0;
 	return -1;
     }
 
@@ -397,6 +400,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
     if(nsamples == 0) {
 	PyErr_SetString(PyExc_RuntimeError, "nsamples is 0 (is scope2rt loaded?)");
 	hal_exit(self->hal_id);
+	self->hal_id = 0;
 	return -1;
     }
 
@@ -406,6 +410,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
 	errno = -res;
 	PyErr_SetFromErrno(PyExc_RuntimeError);
 	hal_exit(self->hal_id);
+	self->hal_id = 0;
 	return -1;
     }
 
@@ -415,6 +420,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
 	PyErr_SetFromErrno(PyExc_RuntimeError);
 	rtapi_shmem_delete(self->shm_id, self->hal_id);
 	hal_exit(self->hal_id);
+	self->hal_id = 0;
 	return -1;
     }
 
