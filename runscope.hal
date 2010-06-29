@@ -1,12 +1,16 @@
 loadrt scope2rt
 loadrt threads
-loadrt siggen
-loadrt charge_pump
+loadrt siggen 
+loadrt stepgen step_type=0 ctrl_type=v
 
+addf stepgen.capture-position thread1
+addf stepgen.make-pulses thread1
+addf stepgen.update-freq thread1
 addf siggen.0.update thread1
-addf charge-pump thread1
 
-setp charge-pump.enable 1
+setp stepgen.0.enable 1
+setp stepgen.0.position-scale 10
+setp stepgen.0.velocity-cmd 1
 
 start
 
