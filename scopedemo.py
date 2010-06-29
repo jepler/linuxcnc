@@ -90,6 +90,19 @@ class Trace:
 
     def expire_cache(self):
 	self._cache = None
+	self._pointcache = None
+
+    def get_points(self, slicer=None):
+	if not self.data: return []
+	if not self._pointcache:
+	    if slicer:
+		pi = iter(enumerate(itertools.islice(self.data, slicer.indices(len(self.data)))))
+	    else:
+		pi = iter(enumerate(self.data))
+	    xs = self.hscale
+	    ys = self.vscale
+	    self._pointcache = goocanvas.Points([(x*xs, y*ys) for (x,y) in pi])
+	return self._pointcache
 
     def get_pathdata(self, slicer = None):
 	if not self.data: return ""
@@ -116,41 +129,55 @@ def trace2path(parent, points, xo, xs, yo, ys, **kw):
     return r
 
 cap = Capture()
-t1 = Trace([], .2, 20); cap.add_pin(t1, 'charge-pump.out')
-t2 = Trace([], .2, 20); cap.add_pin(t2, 'siggen.0.sine')
-t3 = Trace([], .2, 20); cap.add_pin(t3, 'siggen.0.cosine')
+t1 = Trace([], 2, 20); cap.add_pin(t1, 'charge-pump.out')
+t2 = Trace([], 2, 20); cap.add_pin(t2, 'siggen.0.sine')
+t3 = Trace([], 2, 20); cap.add_pin(t3, 'siggen.0.cosine')
 cap.attach_thread("thread1")
 cap.start_capture()
 
 w = gtk.Window()
 w.connect("destroy", gtk.main_quit)
-canv = goocanvas.Canvas()
+canv = goocanvas.Canvas(background_color="black")
+cr = canv.get_root_item()
 canv.set_size_request(640,480)
 w.add(canv)
 w.show_all()
 
-cr = canv.get_root_item()
-
-path1 = goocanvas.Path(parent=cr, data=t1.get_pathdata(), stroke_color="green", line_width=2.0)
+path1 = goocanvas.Polyline(parent=cr, stroke_color="green")
 path1.translate(0, 64)
-path2 = goocanvas.Path(parent=cr, data=t2.get_pathdata(), stroke_color="blue", line_width=2.0)
+path2 = goocanvas.Polyline(parent=cr, stroke_color="blue")
 path2.translate(0, 128)
-path3 = goocanvas.Path(parent=cr, data=t2.get_pathdata(), stroke_color="red", line_width=2.0)
+path3 = goocanvas.Polyline(parent=cr, stroke_color="red")
 path3.translate(0, 128)
 
+reticle = []
+for x in range(-5, 6):
+    for y in range(-5, 6):
+	if x == 0: dx = 5
+	else: dx = 2
+
+	if y == 0: dy = 5
+	else: dy = 2
+
+	xx = (x+5) * 640 / 10.
+	yy = (y+5) * 480 / 10.
+
+	print xx, yy, dx, dy
+	reticle.append(goocanvas.Rect(parent=cr, width=dx, height=dy, x=xx-dx/2, y=yy-dy/2, fill_color="white", stroke_color="white", line_width=1.0))
+
 def painter():
+    st = time.time()
     if cap.poll():
-	t1.expire_samples(3200)
-	t2.expire_samples(3200)
-	t3.expire_samples(3200)
+	t1.expire_samples(320)
+	t2.expire_samples(320)
+	t3.expire_samples(320)
 	print len(t2.data)
-	print t2.get_pathdata()[:76]+"..."
-	st = time.time()
-	path1.set_property('data', t1.get_pathdata()); path1.request_update()
-	path2.set_property('data', t2.get_pathdata()); path2.request_update()
-	path3.set_property('data', t3.get_pathdata()); path3.request_update()
-	en = time.time()
-	print "time", en-st
+	#print t2.get_points()[:4]
+	path1.set_property('points', t1.get_points());
+	path2.set_property('points', t2.get_points());
+	path3.set_property('points', t3.get_points());
+    en = time.time()
+    print "time", en-st
     return True
 gobject.idle_add(painter)
 
