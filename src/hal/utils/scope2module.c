@@ -268,9 +268,9 @@ fail:
 }
 
 PyObject *list_pins(PyObject *_self, PyObject *args) {
-    PyObject *result;
+    PyObject *result = PyList_New(0);
     int next;
-    result = PyList_New(0);
+
     if(!result) return 0;
 
     HAL_MUTEX_GET;
@@ -298,11 +298,9 @@ fail:
 }
 
 PyObject *list_params(PyObject *_self, PyObject *args) {
-    PyObject *result;
+    PyObject *result = PyList_New(0);
     int next;
 
-    if(!PyArg_ParseTuple(args, "")) return 0;
-    result = PyList_New(0);
     if(!result) return 0;
 
     HAL_MUTEX_GET;
