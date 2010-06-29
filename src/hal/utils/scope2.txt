@@ -28,8 +28,8 @@ unbounded amounts of data from realtime with a very modest requirement
 for shared memory.
 
 
-The design of scope2
-~~~~~~~~~~~~~~~~~~~~
+scope2 compared to halscope
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Like halscope, scope2 consists of a real-time part which captures
 samples and a userspace part which retrieves and operates on samples.
@@ -60,10 +60,85 @@ programs to be written.  (One such special-purpose program suggested at
 Workshop is an FFT-based analysis of a PID loop which would indicate
 where a notch filter could be applied to improve motor response)
 
+Objects
+~~~~~~~
+
+Scope object
+~~~~~~~~~~~~
+
+(this should probably be renamed '_capture' or the like, as it is a low-level
+interface on which a high-level interface will be built)
+
+This object interacts with scope2rt to perform primitive operations like
+'attach to thread X', 'connect channel 1 to signal Y', and 'start sampling'.
+
+
+Capture object
+~~~~~~~~~~~~~~
+
+This object passes through some operations to the Scope object but in other
+cases performs higher-level operations (like 'connect Trace object T to signal
+Y on any available channel' and 'read new samples into all connected trace
+objects')
+
+
+Trace object
+~~~~~~~~~~~~
+A trace object has several important methods: 'extend' (to add newly-captured
+samples), 'expire-samples' (to remove samples too old to be of interest),
+and 'get_points' (to return points for the current pygoocanvas display).
+The Capture object adds new samples to a Trace object by calling its 'extend'
+method.
+
+It also has the 'data' attribute, a list (later: array?) which holds the
+samples of data.
+
+
+Trace Arithmetic
+~~~~~~~~~~~~~~~~
+Trace arithmetic is performed by Trace subclasses.  Instead of being
+extended by Capture.poll(), it has an 'update' method which computes the new
+samples.  The object can hold whatever state information is useful (for
+instance, 'Ddt' holds the last value to perform its approximation to the
+derivative function).
+
+New trace data can come by computation on another trace's data or from a fixed
+function (i.e., a waveform generator).
+
+'update' is not constrainted to only
+add new samples; it can also change the value of old samples.  For instance,
+'AC Couple' and 'Integrate (with integration zero at last trigger point)'
+are two examples of trace arithmetic which would at least sometimes recompute
+old values.
+
+
+Order of operations
+~~~~~~~~~~~~~~~~~~~
+For proper functioning of arithmetic traces, correct order of operations
+is important
+ 1. Capture.poll()
+ 2. For each arithmetic trace, t.update() (note: there must be no circular
+    dependencies among arithmetic traces; how will order be computed?
+    topological sort?)
+ 3. For each trace (arithmetic and raw), t.expire_samples() to the same depth
+   
 
 The state of the code
 ~~~~~~~~~~~~~~~~~~~~~
 
 At this time, scope2rt and scope2module are implemented and very lightly
-tested.  An example program, scopedemo.py, captures 10 samples of data
-on two channels and prints them to the terminal.
+tested.  An example program, scopedemo.py, shows three captured signals
+in 'roll' mode, plus the derivative of one of the signals.
+
+The performance of pygoocanvas is disappointing.  With under 10k samples
+(3.2k each in 3 channels), performance was only 2-3fps in roll mode.
+
+
+Next steps
+~~~~~~~~~~
+ * Find a draw API that gives acceptable performance and finalize trace
+   appearance
+ * Implement triggering
+   * Only thing needed is 'boolean function is true'; everything else
+     is buildable from trace arithmetic
+ * Implement user interface elements
