@@ -66,6 +66,7 @@ class Trace:
 	self.vscale = vscale
 	self.hscale = hscale
 	self._cache = None
+	self._pointcache = None
 
     def set_data(self, data):
 	self.data = list(data)
@@ -120,13 +121,34 @@ class Trace:
 	    self._cache = " ".join(data)
 	return self._cache
 
+class Ddt(Trace):
+    def __init__(self, base, *args):
+	Trace.__init__(self, [], *args)
+	self.base = base
+
+    def update(self):
+	if self.base.data and not self.data:
+	    self.data = [0]
+	    self.last = self.base.data[0]
+	append = self.data.append
+	newdata = self.base.data[len(self.data):]
+	last = self.last
+	for d in newdata:
+	    append((last-d)/fperiod)
+	    last = d
+	self.last = last
 
 cap = Capture()
 t1 = Trace([], 2, 20); cap.add_pin(t1, 'charge-pump.out')
 t2 = Trace([], 2, 20); cap.add_pin(t2, 'siggen.0.sine')
 t3 = Trace([], 2, 20); cap.add_pin(t3, 'siggen.0.cosine')
+t4 = Ddt(t2, 2, 10)
 cap.attach_thread("thread1")
 cap.start_capture()
+period = cap.get_thread_period()
+fperiod = period*1.e-9
+rfperiod = 1./fperiod
+print period, fperiod, rfperiod
 
 w = gtk.Window()
 w.connect("destroy", gtk.main_quit)
@@ -142,6 +164,8 @@ path2 = goocanvas.Polyline(parent=cr, stroke_color="blue")
 path2.translate(0, 128)
 path3 = goocanvas.Polyline(parent=cr, stroke_color="red")
 path3.translate(0, 128)
+path4 = goocanvas.Polyline(parent=cr, stroke_color="white")
+path4.translate(0, 192)
 
 reticle = []
 for x in range(-5, 6):
@@ -161,14 +185,17 @@ for x in range(-5, 6):
 def painter():
     st = time.time()
     if cap.poll():
+	t4.update()
 	t1.expire_samples(320)
 	t2.expire_samples(320)
 	t3.expire_samples(320)
+	t4.expire_samples(320)
 	print len(t2.data)
 	#print t2.get_points()[:4]
 	path1.set_property('points', t1.get_points());
 	path2.set_property('points', t2.get_points());
 	path3.set_property('points', t3.get_points());
+	path4.set_property('points', t4.get_points());
     en = time.time()
     print "time", en-st
     return True
