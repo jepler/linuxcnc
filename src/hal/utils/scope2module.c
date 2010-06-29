@@ -53,6 +53,30 @@ static PyObject *attach_thread(PyObject *_self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject *get_thread_period(PyObject *_self, PyObject *args) {
+    scopeobject *self = (scopeobject*)_self;
+    char *name = self->shm->current_thread;
+    int next;
+    PyObject *result = 0;
+
+    if(!PyArg_ParseTuple(args, "|s:get_thread_period", &name)) return 0;
+
+    HAL_MUTEX_GET;
+    next = hal_data->thread_list_ptr;
+    while(next) {
+	hal_thread_t *thread = SHMPTR(next);
+	if(!strcmp(name, thread->name)) {
+	    result = PyInt_FromLong(thread->period);
+	    break;
+	}
+    }
+    HAL_MUTEX_GIVE;
+
+    if(!result)
+	PyErr_Format(PyExc_ValueError, "No such thread '%s'", name);
+    return result;
+}
+
 static PyObject *start_capture(PyObject *_self, PyObject *args) {
     scopeobject *self = (scopeobject*)_self;
     self->shm->request_state = RUNNING;
@@ -410,6 +434,8 @@ static void scope_delete(PyObject *_self) {
 static PyMethodDef scope_methods[] = {
     {"attach_thread", attach_thread, METH_VARARGS,
 	"attach the capture function to the named thread"},
+    {"get_thread_period", get_thread_period, METH_VARARGS,
+	"get the period in nanoseconds of the attached or named thread"},
     {"start_capture", start_capture, METH_VARARGS,
 	"start capturing the selected channels"},
     {"stop_capture", stop_capture, METH_VARARGS,
