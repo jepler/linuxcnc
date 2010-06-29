@@ -532,5 +532,7 @@ void initscope2(void) {
     PyModule_AddIntConstant(m, "HAL_FLOAT", HAL_FLOAT);
     PyModule_AddIntConstant(m, "HAL_S32", HAL_S32);
     PyModule_AddIntConstant(m, "HAL_U32", HAL_U32);
+
+    PyModule_AddIntConstant(m, "NCHANNELS", NCHANNELS);
 }
 
