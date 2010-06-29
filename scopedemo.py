@@ -1,34 +1,14 @@
 #!/usr/bin/python
-import sys
 from scope2 import *
-import time
-
-s = Scope()
-print "pins", s.list_pins()
-
-s.attach_thread('thread1')
-period = s.get_thread_period()
-s.set_channel_pin(0, 'charge-pump.out')
-s.set_channel_pin(1, 'siggen.0.cosine')
-s.set_channel_pin(2, 'siggen.0.sine')
-s.start_capture()
-
-r = []
-N=4000
-c=0
-while len(r) < N:
-    c += 1
-    r.extend(s.get_samples(N-len(r)))
-    time.sleep(.01)
-s.stop_capture()
-o = s.check_overflow()
-
-print "Got %d samples in %d queries" % (len(r), c)
-if o: print "lost %d samples due to overflow" % o
-
-import gtk
-import goocanvas
 import cairo
+import gobject
+import goocanvas
+import gtk
+import itertools
+import sys
+import time
+import weakref
+
 class Capture:
     def __init__(self):
 	self.s = Scope()
@@ -103,13 +83,21 @@ class Trace:
 	self.data.extend(newdata)
 	self.expire_cache()
 
+    def expire_samples(self, max_samples):
+	if len(self.data) > max_samples:
+	    del self.data[:-max_samples]
+	    self.expire_cache()
+
     def expire_cache(self):
 	self._cache = None
 
-    def get_pathdata(self):
+    def get_pathdata(self, slicer = None):
 	if not self.data: return ""
 	if not self._cache:
-	    pi = iter(enumerate(self.data))
+	    if slicer:
+		pi = iter(enumerate(itertools.islice(self.data, slicer.indices(len(self.data)))))
+	    else:
+		pi = iter(enumerate(self.data))
 	    xs = self.hscale
 	    ys = self.vscale
 	    x, y = pi.next()
@@ -127,21 +115,43 @@ def trace2path(parent, points, xo, xs, yo, ys, **kw):
     r.translate(xo,yo)
     return r
 
+cap = Capture()
+t1 = Trace([], .2, 20); cap.add_pin(t1, 'charge-pump.out')
+t2 = Trace([], .2, 20); cap.add_pin(t2, 'siggen.0.sine')
+t3 = Trace([], .2, 20); cap.add_pin(t3, 'siggen.0.cosine')
+cap.attach_thread("thread1")
+cap.start_capture()
+
 w = gtk.Window()
 w.connect("destroy", gtk.main_quit)
-c = goocanvas.Canvas()
-c.set_size_request(640,480)
-w.add(c)
+canv = goocanvas.Canvas()
+canv.set_size_request(640,480)
+w.add(canv)
 w.show_all()
 
-path1 = trace2path(c.get_root_item(), (i[0] for i in r),
-    xs=.1, ys=10, xo=0, yo=64,
-    stroke_color="green", line_width=2.0)
-path2 = trace2path(c.get_root_item(), (i[1] for i in r),
-    xs=.1, ys=10, xo=0, yo=128,
-    stroke_color="blue", line_width=2.0)
-path3 = trace2path(c.get_root_item(), (i[2] for i in r),
-    xs=.1, ys=10, xo=0, yo=128,
-    stroke_color="black", line_width=2.0)
+cr = canv.get_root_item()
+
+path1 = goocanvas.Path(parent=cr, data=t1.get_pathdata(), stroke_color="green", line_width=2.0)
+path1.translate(0, 64)
+path2 = goocanvas.Path(parent=cr, data=t2.get_pathdata(), stroke_color="blue", line_width=2.0)
+path2.translate(0, 128)
+path3 = goocanvas.Path(parent=cr, data=t2.get_pathdata(), stroke_color="red", line_width=2.0)
+path3.translate(0, 128)
+
+def painter():
+    if cap.poll():
+	t1.expire_samples(3200)
+	t2.expire_samples(3200)
+	t3.expire_samples(3200)
+	print len(t2.data)
+	print t2.get_pathdata()[:76]+"..."
+	st = time.time()
+	path1.set_property('data', t1.get_pathdata()); path1.request_update()
+	path2.set_property('data', t2.get_pathdata()); path2.request_update()
+	path3.set_property('data', t3.get_pathdata()); path3.request_update()
+	en = time.time()
+	print "time", en-st
+    return True
+gobject.idle_add(painter)
 
 gtk.main()
