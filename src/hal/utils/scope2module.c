@@ -218,7 +218,7 @@ PyObject *get_samples(PyObject *_self, PyObject *args) {
     PyObject *result = PyList_New(0);
     int max = self->shm->nsamples, count=0;
     struct scope_record *record;
-    if(!PyArg_ParseTuple(args, "i", &max)) return 0;
+    if(!PyArg_ParseTuple(args, "|i", &max)) return 0;
     while(count < max && (record = get_out_ptr(self->shm))) {
 	PyObject *pyrecord = get_record(self->shm, record);
 	count++;
