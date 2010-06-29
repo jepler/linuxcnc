@@ -36,7 +36,7 @@ static PyObject *attach_thread(PyObject *_self, PyObject *args) {
     char *new_thread;
     int res;
 
-    if(!PyArg_ParseTuple(args, "s", &new_thread)) return 0;
+    if(!PyArg_ParseTuple(args, "s:attach_thread", &new_thread)) return 0;
 
     if(*self->shm->current_thread) {
 	hal_del_funct_from_thread("scope2rt.capture", self->shm->current_thread);
@@ -119,7 +119,7 @@ PyObject *set_channel_pin(PyObject *_self, PyObject *args) {
     unsigned channel;
     PyObject *result;
 
-    if(!PyArg_ParseTuple(args, "Is", &channel, &name)) return 0;
+    if(!PyArg_ParseTuple(args, "Is:set_channel_pin", &channel, &name)) return 0;
 
     HAL_MUTEX_GET;
     pin = halpr_find_pin_by_name(name);
@@ -145,7 +145,7 @@ PyObject *set_channel_sig(PyObject *_self, PyObject *args) {
     unsigned channel;
     PyObject *result;
 
-    if(!PyArg_ParseTuple(args, "Is", &channel, &name)) return 0;
+    if(!PyArg_ParseTuple(args, "Is:set_channel_sig", &channel, &name)) return 0;
 
     HAL_MUTEX_GET;
     sig = halpr_find_sig_by_name(name);
@@ -167,7 +167,8 @@ PyObject *set_channel_param(PyObject *_self, PyObject *args) {
     unsigned channel;
     PyObject *result;
 
-    if(!PyArg_ParseTuple(args, "Is", &channel, &name)) return 0;
+    if(!PyArg_ParseTuple(args, "Is:set_channel_param", &channel, &name))
+	return 0;
 
     HAL_MUTEX_GET;
     param = halpr_find_param_by_name(name);
@@ -218,7 +219,7 @@ PyObject *get_samples(PyObject *_self, PyObject *args) {
     PyObject *result = PyList_New(0);
     int max = self->shm->nsamples, count=0;
     struct scope_record *record;
-    if(!PyArg_ParseTuple(args, "|i", &max)) return 0;
+    if(!PyArg_ParseTuple(args, "|i:get_samples", &max)) return 0;
     while(count < max && (record = get_out_ptr(self->shm))) {
 	PyObject *pyrecord = get_record(self->shm, record);
 	count++;
@@ -364,7 +365,7 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
     unsigned int nsamples;
     int res;
 
-    if(!PyArg_ParseTuple(args, "|s", &name)) return -1;
+    if(!PyArg_ParseTuple(args, "|s:scope.Scope", &name)) return -1;
 
     self->hal_id = hal_init(name);
     if(self->hal_id <= 0) {
