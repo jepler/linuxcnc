@@ -29,6 +29,56 @@ if o: print "lost %d samples due to overflow" % o
 import gtk
 import goocanvas
 import cairo
+class Capture:
+    def __init__(self):
+	self.s = Scope()
+	self.channels = {}
+	print self, dir(self)
+
+    def attach_thread(self, thread):
+	self.s.attach_thread(thread)
+
+    def start_capture(self): self.s.start_capture()
+    def stop_capture(self): self.s.stop_capture()
+    def capture_state(self): return self.s.capture_state()
+
+    def get_thread_period(self, *opt_name):
+	return self.s.get_thread_period(*opt_name)
+
+    def get_available_channel(self):
+	print self, dir(self)
+	for c in range(NCHANNELS):
+	    if c not in self.channels: return c
+	raise ValueError, "all channels in use"	    
+
+    def use_channel(self, trace, channel):
+	self.channels[channel] = weakref.proxy(trace)
+
+    def add_pin(self, trace, pin):
+	channel = self.get_available_channel()
+	self.s.set_channel_pin(channel, pin)
+	self.use_channel(trace, channel)
+
+    def add_param(self, trace, param):
+	channel = self.get_available_channel()
+	self.s.set_channel_param(channel, pin)
+	self.use_channel(trace, channel)
+
+    def add_sig(self, trace, sig):
+	channel = self.get_available_channel()
+	self.s.set_channel_sig(channel, pin)
+	self.use_channel(trace, channel)
+
+    def poll(self):
+	assert self.capture_state(), "must be capturing to poll"
+	samples = self.s.get_samples()
+	print "poll()", len(samples)
+	for k, v in self.channels.items():
+	    v.extend(sample[k] for sample in samples)
+	return len(samples)
+
+    def check_overflow(self):
+	return self.s.check_overflow()
 
 class Trace:
     def __init__(self, data, hscale=1.0, vscale=1.0):
