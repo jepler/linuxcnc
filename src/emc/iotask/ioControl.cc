@@ -772,7 +772,7 @@ int main(int argc, char *argv[])
 	if (read_hal_inputs() > 0) {
 	    emcioStatus.command_type = EMC_IO_STAT_TYPE;
 	    emcioStatus.echo_serial_number =
-		emcioCommand->serial_number+1; //need for different serial number, because we are pushing a new message
+		emcioCommand->serial_number;
 	    emcioStatus.heartbeat++;
 	    emcioStatusBuffer->write(&emcioStatus);
 	}
