@@ -206,10 +206,11 @@ class Ddt(Trace):
 	self.kill_cache()
 
 cap = Capture()
-t1 = Trace([], .01, 1., 1., (1,0,0)); cap.add_pin(t1, 'stepgen.0.step')
-t2 = Trace([], .01, 1., 4., (0,1,0)); cap.add_pin(t2, 'siggen.0.sine')
-t3 = Trace([], .01, 1., 4., (0,0,1)); cap.add_pin(t3, 'siggen.0.cosine')
-t4 = Ddt(t2, .01, 10., 6., (0,1,1))
+print cap.s.list_pins()
+t1 = Trace([], .002, 1., 1., (1,0,0)); cap.add_pin(t1, 'stepgen.0.phase-A')
+t2 = Trace([], .002, 1., 4., (0,1,0)); cap.add_pin(t2, 'siggen.0.sine')
+t3 = Trace([], .002, 1., 4., (0,0,1)); cap.add_pin(t3, 'siggen.0.cosine')
+t4 = Ddt(t2, .002, 10., 6., (0,1,1))
 traces = [t1, t2, t3, t4]
 cap.attach_thread("thread1")
 cap.start_capture()
@@ -293,18 +294,15 @@ w.add(screen)
 w.show_all()
 
 def painter():
-    st = time.time()
     if cap.poll():
 	t4.update()
-	t1.expire_samples(3200)
-	t2.expire_samples(3200)
-	t3.expire_samples(3200)
-	t4.expire_samples(3200)
+	t1.expire_samples(5000)
+	t2.expire_samples(5000)
+	t3.expire_samples(5000)
+	t4.expire_samples(5000)
 	screen.queue_draw()
-    en = time.time()
-    print "time", en-st
     return True
-gobject.timeout_add(50, painter)
+gobject.timeout_add(100, painter)
 
 gtk.main()
 
