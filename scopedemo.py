@@ -128,16 +128,20 @@ class Trace:
 
         scale = height / self.vscale / 10.
         voff = -self.voff*height/10.
-        def Y(y): return height-y*scale+voff
         canvas.set_line_width(1)
+	canvas.set_source_rgba(.8, .8, .8)
+	canvas.move_to(0, height+voff)
+	canvas.line_to(width, height+voff)
+	canvas.stroke()
+
         try:
-            if self.sparse: return self.draw_sparse(canvas, xo, width, Y)
-            else: return self.draw_dense(canvas, xo, width, Y)
+            if self.sparse: return self.draw_sparse(canvas, xo, width, height, scale, voff)
+            else: return self.draw_dense(canvas, xo, width, height, scale, voff)
         finally:
             canvas.restore()
        
 
-    def draw_dense(self, canvas, xo, width, Y):
+    def draw_dense(self, canvas, xo, width, height, scale, voff):
         cache = self.cache
         if xo > 0: r = range(width)
         else: r = range(-xo, width)
@@ -147,8 +151,8 @@ class Trace:
             crow = row + xo
             if crow >= len(cache): break
             data = cache[crow]
-            canvas.move_to(row, Y(data[1]))
-            canvas.line_to(row, Y(data[2]))
+            canvas.move_to(row, height-data[1]*scale+voff)
+            canvas.line_to(row, height-data[2]*scale+voff)
         canvas.stroke()
 
         self.set_color(canvas, .80)
@@ -157,12 +161,12 @@ class Trace:
             if crow >= len(cache): break
             data = cache[crow]
             if row == r[0]:
-                canvas.move_to(row, Y(data[0]))
+                canvas.move_to(row, height-data[0]*scale+voff)
             else:
-                canvas.line_to(row, Y(data[0]))
+                canvas.line_to(row, height-data[0]*scale+voff)
         canvas.stroke()
 
-    def draw_sparse(self, canvas, xo, width, Y):
+    def draw_sparse(self, canvas, xo, width, height, scale, voff):
         cache = self.cache
         first = True
 
@@ -173,9 +177,9 @@ class Trace:
 
             if first:
                 first = False
-                canvas.move_to(x, Y(y))
+                canvas.move_to(x, height-y*scale+voff)
             else:
-                canvas.line_to(x, Y(y))
+                canvas.line_to(x, height-y*scale+voff)
         canvas.stroke()
 
     def set_color(self, canvas, alpha):
