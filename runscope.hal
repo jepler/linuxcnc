@@ -1,7 +1,7 @@
 loadrt scope2rt
 loadrt threads
 loadrt siggen 
-loadrt stepgen step_type=0 ctrl_type=v
+loadrt stepgen step_type=2 ctrl_type=v
 
 addf stepgen.capture-position thread1
 addf stepgen.make-pulses thread1
@@ -15,4 +15,6 @@ setp stepgen.0.velocity-cmd 1
 start
 
 #loadusr -w gdb --args python scopedemo.py
+#loadusr -w perf record -f python scopedemo.py
+#loadusr -w python -mprofile scopedemo.py
 loadusr -w python scopedemo.py
