@@ -126,8 +126,6 @@ class Trace:
 	self.cache = None
 
     def draw(self, canvas, xo, width, height):
-	self.update_cache(width)
-
 	canvas.save()
 
 	scale = height / self.vscale / 10.
@@ -137,10 +135,11 @@ class Trace:
 	canvas.move_to(0, height+voff)
 	canvas.line_to(width, height+voff)
 	canvas.stroke()
+	samples_per_pixel = 10. / self.hscale / width
 
+	print samples_per_pixel
 	try:
-	    if self.sparse: return self.draw_sparse(canvas, xo, width, height, scale, voff)
-	    else: return self.draw_dense(canvas, xo, width, height, scale, voff)
+	    draw_trace_cairo(canvas, self.data, xo, samples_per_pixel, width, height, scale, voff, *self.color)
 	finally:
 	    canvas.restore()
        
@@ -207,7 +206,6 @@ class Ddt(Trace):
 	if not newdata: return
 
 	last = self.last
-	print "update", len(newdata)
 	for d in newdata:
 	    append((last-d)/fperiod)
 	    last = d
@@ -310,7 +308,7 @@ def painter():
 	print
 	screen.queue_draw()
     return True
-gobject.timeout_add(100, painter)
+gobject.timeout_add(50, painter)
 
 gtk.main()
 

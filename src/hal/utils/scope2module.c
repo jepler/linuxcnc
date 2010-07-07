@@ -1,11 +1,15 @@
 #include <Python.h>
 #include <object.h>
+#include <pycairo.h>
+#include <cairo.h>
 #include "scope2common.h"
+#include <math.h>
 
 #define HAL_MUTEX_GET \
     rtapi_mutex_get(&(hal_data->mutex))
 #define HAL_MUTEX_GIVE \
     rtapi_mutex_give(&(hal_data->mutex))
+
 
 typedef struct { PyObject_HEAD
     int hal_id;
@@ -96,13 +100,17 @@ static PyObject *capture_state(PyObject *_self, PyObject *args) {
     return PyBool_FromLong(self->shm->current_state == RUNNING);
 }
 
-static PyObject *make_array(const char *typecode) {
+static PyObject *get_array_type() {
     static PyObject *array = 0;
     if(!array) {
 	PyObject *arraymodule = PyImport_ImportModule("array");
 	array = PyObject_GetAttrString(arraymodule, "array");
     }
-    return PyObject_CallFunction(array, "s", typecode);
+    return array;
+}
+
+static PyObject *make_array(const char *typecode) {
+    return PyObject_CallFunction(get_array_type(), "s", typecode);
 }
 
 static int channel_size(hal_type_t data_type) {
@@ -113,7 +121,7 @@ static int channel_size(hal_type_t data_type) {
 	case HAL_FLOAT: return sizeof(hal_float_t);
     }
     Py_FatalError("impossible typecode in channel_size");
-    _exit(99);
+    exit(99);
 }
 
 static const char *channel_typecode(hal_type_t data_type) {
@@ -124,7 +132,7 @@ static const char *channel_typecode(hal_type_t data_type) {
 	case HAL_FLOAT: if(sizeof(hal_float_t) == sizeof(float)) return "f"; else return "d";
     }
     Py_FatalError("impossible typecode in channel_typecode");
-    _exit(99);
+    exit(99);
 }
 
 PyObject *set_channel_offset(scopeobject *scope, unsigned channel, unsigned long offset, hal_type_t type) {
@@ -253,6 +261,8 @@ static void init_convert_data(scopeobject *self) {
     }
 }
 
+// Transpose one scope record so that instead of having records contiguous, the
+// data for each sample is contiguous.
 static void copy_sample_and_advance(scopeobject *self, int sampleno, struct scope_record *record) {
     int i;
     int spacing = self->shm->nsamples * sizeof(hal_data_u);
@@ -266,6 +276,8 @@ static void copy_sample_and_advance(scopeobject *self, int sampleno, struct scop
     advance_out_ptr(self->shm);
 }
 
+// New data has been stored in convert_space in the proper arrangement to extend
+// the Python data array.
 static int extend_channel_with_samples(scopeobject *self, int channel, int samples) {
     int spacing;
     char *data_ptr;
@@ -287,6 +299,20 @@ static int extend_channel_with_samples(scopeobject *self, int channel, int sampl
     return ret ? 0 : -1;
 }
 
+// append new samples to the Python data arrays
+//
+// This is done in two steps: first, the new samples are transposed, so that
+// for each channel there's an array of data with all new samples contiguous
+// (in contrast to the shm structure, where all channels of a single sample are
+// contiguous).  second, the underlying python array object is extended using
+// its 'fromstring' method.
+//
+// This defers the overhead of creating Python objects for these numeric
+// samples to when they are accessed with the Python subscript operator, if
+// ever.  When drawing and common trace math functions are implemented in C,
+// this conversion may never be performed.  Additionally, when drawing is
+// implemented in C the overhead of Python type-checking and conversion can
+// be evicted from the inner loops in favor of raw C pointer operations.
 PyObject *get_samples(PyObject *_self, PyObject *args) {
     scopeobject *self = (scopeobject*)_self;
     int i, copied=0, max=self->shm->nsamples;
@@ -597,9 +623,125 @@ PyTypeObject scopeobject_type = {
     0,                         /*tp_is_gc*/
 };
 
+#ifdef HAVE_PYCAIRO
+static Pycairo_CAPI_t *Pycairo_CAPI;
+
+static
+int get_cairo_context(PyObject *_pyctx, void *_ctx) {
+    PycairoContext *pyctx;
+    cairo_t **ctx = (cairo_t**)_ctx;
+
+    if(!PyObject_IsInstance(_pyctx, (PyObject*)&PycairoContext_Type)) return 0;
+    pyctx = (PycairoContext*)_pyctx;
+    *ctx = pyctx->ctx;
+
+    return 1;
+}
+
+struct pyarrayinfo {
+    const void *data;
+    size_t nelem;
+    size_t sz;
+    char typecode; 
+};
+
+static
+int typecode_sz(char typecode) {
+    switch(typecode) {
+	case 'i': case 'I': return sizeof(int);
+	case 'l': case 'L': return sizeof(long);
+	case 'f': case 'd': return sizeof(double);
+	case 'B': return 1;
+    }
+    PyErr_Format(PyExc_ValueError, "Array must be i, I, l, L, f, d, or b, not %c", typecode);
+    return -1;
+}
+
+static
+int get_array(PyObject *arr, void *_info) {
+    const void *buf;
+    Py_ssize_t len;
+    struct pyarrayinfo *info;
+    PyObject *typecode_obj;
+
+    if(!PyObject_IsInstance(arr, get_array_type())) return 0;
+
+    if(PyObject_AsReadBuffer(arr, &buf, &len) < 0) return 0;
+
+    typecode_obj = PyObject_GetAttrString(arr, "typecode");
+    if(!typecode_obj) return 0;
+    if(!PyString_Check(typecode_obj)) { Py_DECREF(typecode_obj); return 0; }
+
+    info = (struct pyarrayinfo*)_info;
+    info->data = buf;
+    info->typecode = PyString_AsString(typecode_obj)[0];
+    info->sz = typecode_sz(info->typecode);
+    if(info->sz < 0) return 0;
+
+    info->nelem = len / info->sz;
+    Py_DECREF(typecode_obj);
+    return 1;
+}
+
+static int first_sample(double pps, double xo) {
+    // x = sa * pps - xo
+    // xo = sa*pps
+    // sa = xo / pps
+    double fsa = floor(xo / pps);
+    return 0;
+    if(fsa < 0) return 0;
+    return fsa;
+}
+
+double get_sample(struct pyarrayinfo *arr, int idx) {
+    const char *d = arr->data + arr->sz * idx;
+    if(idx < 0 || idx >= arr->nelem) return nan("");
+    switch(arr->typecode) {
+	case 'i': return *(const int*)d;
+	case 'I': return *(const unsigned int*)d;
+	case 'l': return *(const long*)d;
+	case 'L': return *(const unsigned long*)d;
+	case 'f': return *(const float*)d;
+	case 'd': return *(const double*)d;
+	case 'B': return !!*(const unsigned char*)d;
+    }
+    Py_FatalError("impossible typecode in channel_size");
+    exit(99);
+}
+
+static
+PyObject *draw_trace_cairo(PyObject *self, PyObject *args) {
+    cairo_t *ctx;
+    int xo, width, height, sa;
+    double scale, voff, r, g, b, spp, pps;
+    struct pyarrayinfo arr;
+    int first = 1;
+
+    if(!PyArg_ParseTuple(args, "O&O&ddiiddddd", get_cairo_context, &ctx, get_array, &arr, &xo, &spp, &width, &height, &scale, &voff, &r, &g, &b))
+	return 0;
+
+    printf("canvas type=
+    pps = 1/spp;
+    cairo_set_source_rgba(ctx, r, g, b, .8);
+    for(sa=first_sample(spp, xo); sa<arr.nelem; sa++) {
+	double x = sa * pps - xo, y = height - get_sample(&arr, sa) * scale + voff;
+	if(isnan(y)) { first = 1; continue; }
+	if(first) { cairo_move_to(ctx, x, y); first = 0; }
+	else cairo_line_to(ctx, x, y);
+	//printf("%f %f\n", x, y);
+	if(x > width) break;
+    }
+    cairo_stroke(ctx);
+    Py_RETURN_NONE;
+}
+#endif
 
 PyMethodDef module_methods[] = {
-    {NULL},
+#ifdef HAVE_PYCAIRO
+    {"draw_trace_cairo", draw_trace_cairo, METH_VARARGS,
+	"Draw a trace to a cairo context"},
+#endif
+    {0},
 };
 
 char *module_doc = "Interface to hal's scope2\n"
@@ -611,6 +753,10 @@ void initscope2(void) {
 
     PyType_Ready(&scopeobject_type);
     PyModule_AddObject(m, "Scope", (PyObject*)&scopeobject_type);
+
+#ifdef HAVE_PYCAIRO
+    Pycairo_IMPORT;
+#endif
 
     PyModule_AddIntConstant(m, "HAL_BIT", HAL_BIT);
     PyModule_AddIntConstant(m, "HAL_FLOAT", HAL_FLOAT);
