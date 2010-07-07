@@ -7,6 +7,7 @@ import itertools
 import sys
 import time
 import weakref
+import array
 
 class Capture:
     def __init__(self):
@@ -29,37 +30,42 @@ class Capture:
 	raise ValueError, "all channels in use"	    
 
     def use_channel(self, trace, channel):
-	self.channels[channel] = weakref.proxy(trace)
+	self.channels[channel] = weakref.proxy(trace, lambda unused: self.free_channel(channel))
+	
+    def free_channel(self, channel):
+	del self.channels[channel]
+	self.s.channel_off(channel)
 
     def add_pin(self, trace, pin):
 	channel = self.get_available_channel()
-	self.s.set_channel_pin(channel, pin)
+	r = self.s.set_channel_pin(channel, pin)
+	trace.set_data(r)
 	self.use_channel(trace, channel)
 
     def add_param(self, trace, param):
 	channel = self.get_available_channel()
 	self.s.set_channel_param(channel, pin)
+	trace.set_data(r)
 	self.use_channel(trace, channel)
 
     def add_sig(self, trace, sig):
 	channel = self.get_available_channel()
 	self.s.set_channel_sig(channel, pin)
+	trace.set_data(r)
 	self.use_channel(trace, channel)
 
     def poll(self):
 	assert self.capture_state(), "must be capturing to poll"
-	samples = self.s.get_samples()
-	print "poll()", len(samples)
-	for k, v in self.channels.items():
-	    v.extend(sample[k] for sample in samples)
-	return len(samples)
+	new_samples, overruns = self.s.get_samples()
+	print "poll()", new_samples, overruns
+	return new_samples
 
     def check_overflow(self):
 	return self.s.check_overflow()
 
 class Trace:
-    def __init__(self, data, hscale=1.0, vscale=1.0, voff=0.0, color=(1,1,1)):
-	self.data = list(data)
+    def __init__(self, hscale=1.0, vscale=1.0, voff=0.0, color=(1,1,1)):
+	self.data = []
 	self.hscale = hscale
 	self.vscale = vscale
 	self.voff = voff
@@ -68,15 +74,13 @@ class Trace:
 	self.cache = None
 
     def set_data(self, data):
-	self.data = list(data)
+	self.data = data
+
+    def update(self):
 	self.kill_cache()
 
     def set_hscale(self, hscale):
 	self.hscale = hscale
-	self.kill_cache()
-
-    def extend(self, newdata):
-	self.data.extend(newdata)
 	self.kill_cache()
 
     def expire_samples(self, max_samples):
@@ -190,12 +194,13 @@ class Trace:
 
 class Ddt(Trace):
     def __init__(self, base, *args):
-	Trace.__init__(self, [], *args)
+	Trace.__init__(self, *args)
+	self.data = array.array('d')
 	self.base = base
 
     def update(self):
 	if self.base.data and not self.data:
-	    self.data = [0]
+	    self.data.append(0)
 	    self.last = self.base.data[0]
 	append = self.data.append
 	newdata = self.base.data[len(self.data):]
@@ -211,9 +216,9 @@ class Ddt(Trace):
 
 cap = Capture()
 print cap.s.list_pins()
-t1 = Trace([], .002, 1., 1., (1,0,0)); cap.add_pin(t1, 'stepgen.0.phase-A')
-t2 = Trace([], .002, 1., 4., (0,1,0)); cap.add_pin(t2, 'siggen.0.sine')
-t3 = Trace([], .002, 1., 4., (0,0,1)); cap.add_pin(t3, 'siggen.0.cosine')
+t1 = Trace(.002, 1., 1., (1,0,0)); cap.add_pin(t1, 'stepgen.0.phase-A')
+t2 = Trace(.002, 1., 4., (0,1,0)); cap.add_pin(t2, 'siggen.0.sine')
+t3 = Trace(.002, 1., 4., (0,0,1)); cap.add_pin(t3, 'siggen.0.cosine')
 t4 = Ddt(t2, .002, 10., 6., (0,1,1))
 traces = [t1, t2, t3, t4]
 cap.attach_thread("thread1")
@@ -299,11 +304,10 @@ w.show_all()
 
 def painter():
     if cap.poll():
-	t4.update()
-	t1.expire_samples(5000)
-	t2.expire_samples(5000)
-	t3.expire_samples(5000)
-	t4.expire_samples(5000)
+	for t in traces: t.update()
+	for t in traces: t.expire_samples(5000)
+	for t in traces: print t.data[-1],
+	print
 	screen.queue_draw()
     return True
 gobject.timeout_add(100, painter)

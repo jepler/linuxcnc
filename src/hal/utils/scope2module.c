@@ -11,6 +11,9 @@ typedef struct { PyObject_HEAD
     int hal_id;
     int shm_id;
     struct scope_shm *shm;
+    PyObject *chanobj[NCHANNELS];
+    size_t channel_size[NCHANNELS];
+    char *convert_space;
 } scopeobject;
 
 static int next(struct scope_shm *shm, int i) {
@@ -22,7 +25,6 @@ static int next(struct scope_shm *shm, int i) {
 static struct scope_record *get_out_ptr(struct scope_shm *shm) {
     int out = shm->out;
     int in = shm->in;
-    //printf("in=%d out=%d\n", in, out);
     if(out == in) return 0;
     return &shm->data[out];
 }
@@ -94,12 +96,44 @@ static PyObject *capture_state(PyObject *_self, PyObject *args) {
     return PyBool_FromLong(self->shm->current_state == RUNNING);
 }
 
-PyObject *set_channel_offset(struct scope_shm *shm, unsigned channel, unsigned long offset, hal_type_t type) {
+static PyObject *make_array(const char *typecode) {
+    static PyObject *array = 0;
+    if(!array) {
+	PyObject *arraymodule = PyImport_ImportModule("array");
+	array = PyObject_GetAttrString(arraymodule, "array");
+    }
+    return PyObject_CallFunction(array, "s", typecode);
+}
+
+static int channel_size(hal_type_t data_type) {
+    switch(data_type) {
+	case HAL_BIT: return 1;
+	case HAL_S32: return sizeof(hal_s32_t);
+	case HAL_U32: return sizeof(hal_u32_t);
+	case HAL_FLOAT: return sizeof(hal_float_t);
+    }
+    Py_FatalError("impossible typecode in channel_size");
+    _exit(99);
+}
+
+static const char *channel_typecode(hal_type_t data_type) {
+    switch(data_type) {
+	case HAL_BIT: return "B";
+	case HAL_S32: if(sizeof(int) == sizeof(hal_s32_t)) return "i"; else return "l";
+	case HAL_U32: if(sizeof(int) == sizeof(hal_u32_t)) return "I"; else return "L";
+	case HAL_FLOAT: if(sizeof(hal_float_t) == sizeof(float)) return "f"; else return "d";
+    }
+    Py_FatalError("impossible typecode in channel_typecode");
+    _exit(99);
+}
+
+PyObject *set_channel_offset(scopeobject *scope, unsigned channel, unsigned long offset, hal_type_t type) {
+    struct scope_shm *shm = scope->shm;
     if(shm->current_state != STOPPED || shm->request_state != STOPPED) {
 	PyErr_SetString(PyExc_RuntimeError, "Can only set channel while stopped");
 	return 0;
     }
-    if(!SHMCHK(SHMPTR(offset))) {
+    if(offset != 0 && !SHMCHK(SHMPTR(offset))) {
 	PyErr_Format(PyExc_RuntimeError, "Data offset %lu out of range", offset);
 	return 0;
     }
@@ -109,7 +143,18 @@ PyObject *set_channel_offset(struct scope_shm *shm, unsigned channel, unsigned l
     }
     shm->channels[channel].data_type = type;
     shm->channels[channel].data_offset = offset;
-    Py_RETURN_NONE;
+    Py_XDECREF(scope->chanobj[channel]);
+
+    if(offset == 0) {
+	scope->chanobj[channel] = 0;
+	Py_RETURN_NONE;
+    } else {
+	PyObject *chanobj;
+	printf("type=%d typecode=%s\n", type, channel_typecode(type));
+	scope->chanobj[channel] = chanobj = make_array(channel_typecode(type));
+	Py_XINCREF(chanobj);
+	return chanobj;
+    }
 }
 
 PyObject *set_channel_pin(PyObject *_self, PyObject *args) {
@@ -119,7 +164,8 @@ PyObject *set_channel_pin(PyObject *_self, PyObject *args) {
     unsigned channel;
     PyObject *result;
 
-    if(!PyArg_ParseTuple(args, "Is:set_channel_pin", &channel, &name)) return 0;
+    if(!PyArg_ParseTuple(args, "Is:set_channel_pin", &channel, &name))
+	return 0;
 
     HAL_MUTEX_GET;
     pin = halpr_find_pin_by_name(name);
@@ -129,7 +175,7 @@ PyObject *set_channel_pin(PyObject *_self, PyObject *args) {
 	return 0;
     }
 
-    result = set_channel_offset(self->shm, channel,
+    result = set_channel_offset(self, channel,
 	    pin->signal
 		? ((hal_sig_t*)SHMPTR(pin->signal))->data_ptr
 		: SHMOFF(&pin->dummysig),
@@ -145,7 +191,8 @@ PyObject *set_channel_sig(PyObject *_self, PyObject *args) {
     unsigned channel;
     PyObject *result;
 
-    if(!PyArg_ParseTuple(args, "Is:set_channel_sig", &channel, &name)) return 0;
+    if(!PyArg_ParseTuple(args, "Is:set_channel_sig", &channel, &name))
+	return 0;
 
     HAL_MUTEX_GET;
     sig = halpr_find_sig_by_name(name);
@@ -155,7 +202,7 @@ PyObject *set_channel_sig(PyObject *_self, PyObject *args) {
 	return 0;
     }
 
-    result = set_channel_offset(self->shm, channel, sig->data_ptr, sig->type);
+    result = set_channel_offset(self, channel, sig->data_ptr, sig->type);
     HAL_MUTEX_GIVE;
     return result;
 }
@@ -178,9 +225,20 @@ PyObject *set_channel_param(PyObject *_self, PyObject *args) {
 	return 0;
     }
 
-    result = set_channel_offset(self->shm, channel, param->data_ptr, param->type);
+    result = set_channel_offset(self, channel, param->data_ptr, param->type);
     HAL_MUTEX_GIVE;
     return result;
+}
+
+PyObject *channel_off(PyObject *_self, PyObject *args) {
+    scopeobject *self = (scopeobject*)_self;
+    int channel;
+
+    if(!PyArg_ParseTuple(args, "I:set_channel_param", &channel))
+	return 0;
+
+    set_channel_offset(self, channel, 0, 0);
+    Py_RETURN_NONE;
 }
 
 PyObject *check_overflow(PyObject *_self, PyObject *args) {
@@ -188,53 +246,73 @@ PyObject *check_overflow(PyObject *_self, PyObject *args) {
     return PyInt_FromLong(self->shm->overruns);
 }
 
-PyObject *get_record(struct scope_shm *shm, struct scope_record *data) {
-    PyObject *result = PyTuple_New(NCHANNELS);
+static void init_convert_data(scopeobject *self) {
     int i;
-    if(!result) return 0;
-
     for(i=0; i<NCHANNELS; i++) {
-	PyObject *value = 0;
-	if(!shm->channels[i].data_offset) {
-	    Py_INCREF(Py_None);
-	    value = Py_None;
-	} else switch(shm->channels[i].data_type) {
-	    case HAL_BIT: value = PyBool_FromLong(data->data[i].b); break;
-	    case HAL_U32: value = PyLong_FromUnsignedLong(data->data[i].u); break;
-	    case HAL_S32: value = PyInt_FromLong(data->data[i].s); break;
-	    case HAL_FLOAT: value = PyFloat_FromDouble(data->data[i].f); break;
-	    default: PyErr_Format(PyExc_ValueError, "Unexpected type %d for channel %d\n", (int)shm->channels[i].data_type, i);
-	}
-	if(!value) {
-	    Py_DECREF(value);
-	    return 0;
-	}
-	PyTuple_SET_ITEM(result, i, value);
+	if(!self->chanobj[i]) self->channel_size[i] = 0;
+	else self->channel_size[i] = channel_size(self->shm->channels[i].data_type);
     }
-    return result;
+}
+
+static void copy_sample_and_advance(scopeobject *self, int sampleno, struct scope_record *record) {
+    int i;
+    int spacing = self->shm->nsamples * sizeof(hal_data_u);
+    for(i=0; i<NCHANNELS; i++) {
+	char *data_ptr;
+	if(!self->channel_size[i]) continue;
+	data_ptr = self->convert_space + i * spacing
+	    + sampleno * self->channel_size[i];
+	memcpy(data_ptr, &record->data[i], self->channel_size[i]);
+    }
+    advance_out_ptr(self->shm);
+}
+
+static int extend_channel_with_samples(scopeobject *self, int channel, int samples) {
+    int spacing;
+    char *data_ptr;
+    PyObject *buf=0, *ret=0;
+
+    if(self->channel_size[channel] == 0) return 0;
+
+    printf("extend_channels_with_samples(%d) sz=%d\n", channel, self->channel_size[channel]);
+
+    spacing = self->shm->nsamples * sizeof(hal_data_u);
+    data_ptr = self->convert_space + channel * spacing;
+
+    buf = PyBuffer_FromMemory(data_ptr, samples * self->channel_size[channel]);
+
+    if(!buf) return -1;
+    
+    ret = PyObject_CallMethod(self->chanobj[channel], "fromstring", "O", buf);
+    Py_XDECREF(buf);
+    Py_XDECREF(ret);
+
+    return ret ? 0 : -1;
 }
 
 PyObject *get_samples(PyObject *_self, PyObject *args) {
     scopeobject *self = (scopeobject*)_self;
-    PyObject *result = PyList_New(0);
-    int max = self->shm->nsamples, count=0;
-    struct scope_record *record;
+    int i, copied=0, max=self->shm->nsamples;
+
     if(!PyArg_ParseTuple(args, "|i:get_samples", &max)) return 0;
-    while(count < max && (record = get_out_ptr(self->shm))) {
-	PyObject *pyrecord = get_record(self->shm, record);
-	count++;
-	if(!pyrecord) {
-	    Py_DECREF(result);
-	    return 0; // some records were lost if result was not empty!
-	}
-	if(PyList_Append(result, pyrecord) < 0) {
-	    Py_DECREF(result);
-	    Py_DECREF(pyrecord);
-	    return 0; // some records were lost if result was not empty!
-	}
-	advance_out_ptr(self->shm);
+    if(max > self->shm->nsamples) max = self->shm->nsamples;
+    printf("max=%d\n", max);
+    init_convert_data(self);
+
+    for(i=0; i<max; i++) {
+	struct scope_record *record = get_out_ptr(self->shm);;
+	if(!record) break;
+	copy_sample_and_advance(self, i, record);
+	copied++;
     }
-    return result;
+
+    printf("copied=%d\n", copied);
+
+    for(i=0; i<NCHANNELS; i++) {
+	if(extend_channel_with_samples(self, i, copied) != 0) return NULL;
+    }
+
+    return Py_BuildValue("ii", copied, (int)self->shm->overruns);
 }
 
 PyObject *list_threads(PyObject *_self, PyObject *args) {
@@ -423,6 +501,16 @@ int scope_init(PyObject *_self, PyObject *args, PyObject *kw) {
 	return -1;
     }
 
+    self->convert_space = malloc(nsamples * sizeof(struct scope_record));
+    if(!self->convert_space) {
+	PyErr_SetFromErrno(PyExc_MemoryError);
+	rtapi_shmem_delete(self->shm_id, self->hal_id);
+	hal_exit(self->hal_id);
+	self->hal_id = 0;
+	return -1;
+    }
+
+
     return 0;
 }
 
@@ -453,6 +541,8 @@ static PyMethodDef scope_methods[] = {
 	"Make the given channel record the given parameter"},
     {"set_channel_sig", set_channel_sig, METH_VARARGS,
 	"Make the given channel record the given signal"},
+    {"channel_off", channel_off, METH_VARARGS,
+	"Turn off the given channel"},
     {"check_overflow", check_overflow, METH_NOARGS,
 	"Return the number of overflows since capture started"},
     {"get_samples", get_samples, METH_VARARGS,
@@ -535,3 +625,4 @@ void initscope2(void) {
     PyModule_AddIntConstant(m, "NCHANNELS", NCHANNELS);
 }
 
+// vim:sw=4:sts=4:noet:si:
