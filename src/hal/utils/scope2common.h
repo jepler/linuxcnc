@@ -14,7 +14,7 @@ struct scope_capture {
 };
 
 struct scope_record {
-    hal_data_u data[16];
+    hal_data_u data[NCHANNELS];
 };
 
 enum scope_state { STOPPED=0, RUNNING=1 };
