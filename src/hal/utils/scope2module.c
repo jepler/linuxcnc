@@ -150,7 +150,6 @@ PyObject *set_channel_offset(scopeobject *scope, unsigned channel, unsigned long
 	Py_RETURN_NONE;
     } else {
 	PyObject *chanobj;
-	printf("type=%d typecode=%s\n", type, channel_typecode(type));
 	scope->chanobj[channel] = chanobj = make_array(channel_typecode(type));
 	Py_XINCREF(chanobj);
 	return chanobj;
@@ -274,8 +273,6 @@ static int extend_channel_with_samples(scopeobject *self, int channel, int sampl
 
     if(self->channel_size[channel] == 0) return 0;
 
-    printf("extend_channels_with_samples(%d) sz=%d\n", channel, self->channel_size[channel]);
-
     spacing = self->shm->nsamples * sizeof(hal_data_u);
     data_ptr = self->convert_space + channel * spacing;
 
@@ -296,7 +293,7 @@ PyObject *get_samples(PyObject *_self, PyObject *args) {
 
     if(!PyArg_ParseTuple(args, "|i:get_samples", &max)) return 0;
     if(max > self->shm->nsamples) max = self->shm->nsamples;
-    printf("max=%d\n", max);
+
     init_convert_data(self);
 
     for(i=0; i<max; i++) {
@@ -305,8 +302,6 @@ PyObject *get_samples(PyObject *_self, PyObject *args) {
 	copy_sample_and_advance(self, i, record);
 	copied++;
     }
-
-    printf("copied=%d\n", copied);
 
     for(i=0; i<NCHANNELS; i++) {
 	if(extend_channel_with_samples(self, i, copied) != 0) return NULL;
