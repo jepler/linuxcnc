@@ -588,15 +588,15 @@ if pkg-config gtk+-2.0 --atleast-version 2.4.0 >/dev/null 2>&1; then
     HAVE_GNOMEPRINT= 
   fi
 
-  AC_MSG_CHECKING([for pycairo])
-  if pkg-config --exists pycairo; then
+  AC_MSG_CHECKING([for pygtk-dev])
+  if pkg-config --exists pygtk-2.0; then
     AC_MSG_RESULT(yes)
-    PYCAIRO_CFLAGS="`pkg-config --cflags pycairo` -DHAVE_PYCAIRO"
-    PYCAIRO_LIBS="`pkg-config --libs pycairo`"
-    HAVE_PYCAIRO=yes
+    PYGTK_CFLAGS="`pkg-config --cflags pygtk-2.0` -DHAVE_PYGTK"
+    PYGTK_LIBS="`pkg-config --libs pygtk-2.0`"
+    HAVE_PYGTK=yes
   else
     AC_MSG_RESULT(no -- scope2 will not be available)
-    HAVE_PYCAIRO=
+    HAVE_PYGTK=
   fi
 else
   AC_MSG_WARN([GTK2 not found, some utilities (halscope, classicladder) will not be built])
@@ -607,9 +607,9 @@ AC_SUBST(GTK_LIBS)
 AC_SUBST(GTK_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 AC_SUBST(GLIB_CFLAGS)
-AC_SUBST(HAVE_PYCAIRO)
-AC_SUBST(PYCAIRO_CFLAGS)
-AC_SUBST(PYCAIRO_LIBS)
+AC_SUBST(HAVE_PYGTK)
+AC_SUBST(PYGTK_CFLAGS)
+AC_SUBST(PYGTK_LIBS)
 
 ##############################################################################
 # Subsection 3.6 - check for utility programs needed to build and run EMC    #

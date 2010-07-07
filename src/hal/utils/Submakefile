@@ -116,11 +116,11 @@ objects/%.py: %.g ../bin/yapps
 	../bin/yapps $< $@
 
 SCOPEMODULESRCS := hal/utils/scope2module.c
-$(call TOOBJSDEPS, $(SCOPEMODULESRCS)) : EXTRAFLAGS = $(PYCAIRO_CFLAGS)
+$(call TOOBJSDEPS, $(SCOPEMODULESRCS)) : EXTRAFLAGS = $(GTK_CFLAGS) $(PYGTK_CFLAGS)
 PYSRCS += $(SCOPEMODULESRCS)
 
 SCOPEMODULE := ../lib/python/scope2.so
 $(SCOPEMODULE): $(call TOOBJS, $(SCOPEMODULESRCS)) $(HALLIB)
 	$(ECHO) Linking python module $(notdir $@)
-	$(CXX) $(LDFLAGS) -shared -o $@ $^ $(PYCAIRO_LIBS)
+	$(CXX) $(LDFLAGS) -shared -o $@ $^ $(PYGTK_LIBS) $(GTK_LIBS)
 PYTARGETS += $(SCOPEMODULE)

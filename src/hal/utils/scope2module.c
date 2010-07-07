@@ -1,7 +1,5 @@
 #include <Python.h>
 #include <object.h>
-#include <pycairo.h>
-#include <cairo.h>
 #include "scope2common.h"
 #include <math.h>
 
@@ -623,19 +621,71 @@ PyTypeObject scopeobject_type = {
     0,                         /*tp_is_gc*/
 };
 
-#ifdef HAVE_PYCAIRO
-static Pycairo_CAPI_t *Pycairo_CAPI;
+#ifdef HAVE_PYGTK
+#include <pygobject.h>
+#include <pygtk/pygtk.h>
+#include <gdk/gdkdrawable.h>
+#include <gdk/gdktypes.h>
+
+PyObject *get_gdkmodule()
+{
+    static PyObject *gdkmodule = 0;
+    if(!gdkmodule)
+    {
+	//PyObject *gtkmodule;
+
+	pygobject_init(-1, -1, -1);
+	gdkmodule = PyImport_ImportModule("gtk.gdk");
+	//if(!gtkmodule) PyErr_WriteUnraisable(NULL);
+	//gdkmodule = PyObject_GetAttrString(gtkmodule, "gdk");
+	if(!gdkmodule) PyErr_WriteUnraisable(NULL);
+	//Py_XDECREF(gtkmodule);
+    }
+    return gdkmodule;
+}
+
+PyObject *get_gtk_drawable_type() {
+    static PyObject *drawable_type = 0;
+    if(!drawable_type)
+    {
+	drawable_type = PyObject_GetAttrString(get_gdkmodule(), "Drawable");
+	if(!drawable_type) PyErr_WriteUnraisable(NULL);
+    }
+    return drawable_type;
+}
+
+PyObject *get_gdk_gc_type() {
+    static PyObject *gc_type = 0;
+    if(!gc_type)
+    {
+	gc_type = PyObject_GetAttrString(get_gdkmodule(), "GC");
+	if(!gc_type) PyErr_WriteUnraisable(NULL);
+    }
+    return gc_type;
+}
 
 static
-int get_cairo_context(PyObject *_pyctx, void *_ctx) {
-    PycairoContext *pyctx;
-    cairo_t **ctx = (cairo_t**)_ctx;
+int get_gdk_gc(PyObject *pygc, void *_gc) {
+    GdkGC **gc = (GdkGC**)_gc;
 
-    if(!PyObject_IsInstance(_pyctx, (PyObject*)&PycairoContext_Type)) return 0;
-    pyctx = (PycairoContext*)_pyctx;
-    *ctx = pyctx->ctx;
+    if(!PyObject_IsInstance(pygc, get_gdk_gc_type())) return 0;
+    *gc = GDK_GC(pygobject_get(pygc));
 
-    return 1;
+    printf("gc->%p\n", *gc);
+    assert(gc);
+    assert(*gc);
+    return *gc ? 1 : 0;
+}
+
+
+static
+int get_gdk_drawable(PyObject *pydrw, void *_drw) {
+    GdkDrawable **drw = (GdkDrawable**)_drw;
+
+    if(!PyObject_IsInstance(pydrw, get_gtk_drawable_type())) return 0;
+    *drw = GDK_DRAWABLE(pygobject_get(pydrw));
+
+    return drw ? 1 : 0;
 }
 
 struct pyarrayinfo {
@@ -710,35 +760,71 @@ double get_sample(struct pyarrayinfo *arr, int idx) {
 }
 
 static
-PyObject *draw_trace_cairo(PyObject *self, PyObject *args) {
-    cairo_t *ctx;
+GdkPoint *get_pts_buffer(int nelem)
+{
+    static int alloc_elem=0;
+    static GdkPoint *buf=0;
+    if(nelem > alloc_elem)
+    {
+	buf = realloc(buf, nelem * sizeof(*buf));
+	if(!buf)
+	{
+	    Py_FatalError("out of memory in get_pts_buffer");
+	    exit(99);
+	}
+	alloc_elem = nelem;
+    }
+    return buf;
+}
+
+static
+gint F2P(double p)
+{
+    if(p < G_MININT32) return G_MININT32;
+    if(p > G_MAXINT32) return G_MAXINT32;
+    return round(p);
+}
+
+static
+PyObject *draw_trace(PyObject *self, PyObject *args) {
+    GdkDrawable *drw;
+    GdkGC *gc;
+    GdkPoint *pts;
+    int pt_cnt;
     int xo, width, height, sa;
     double scale, voff, r, g, b, spp, pps;
     struct pyarrayinfo arr;
-    int first = 1;
-
-    if(!PyArg_ParseTuple(args, "O&O&ddiiddddd", get_cairo_context, &ctx, get_array, &arr, &xo, &spp, &width, &height, &scale, &voff, &r, &g, &b))
+    
+    if(!PyArg_ParseTuple(args, "O&O&O&ddiiddddd", get_gdk_drawable, &drw, get_gdk_gc, &gc, get_array, &arr, &xo, &spp, &width, &height, &scale, &voff, &r, &g, &b))
 	return 0;
+    assert(gc);
 
-    printf("canvas type=
     pps = 1/spp;
-    cairo_set_source_rgba(ctx, r, g, b, .8);
+    pts = get_pts_buffer(arr.nelem);
+    pt_cnt = 0;
     for(sa=first_sample(spp, xo); sa<arr.nelem; sa++) {
 	double x = sa * pps - xo, y = height - get_sample(&arr, sa) * scale + voff;
-	if(isnan(y)) { first = 1; continue; }
-	if(first) { cairo_move_to(ctx, x, y); first = 0; }
-	else cairo_line_to(ctx, x, y);
-	//printf("%f %f\n", x, y);
+	if(isnan(y)) {
+	    printf("draw(%p, %p, pts, %d)\n", drw, gc, pt_cnt);
+	    if(pt_cnt) { gdk_draw_lines(drw, gc, pts, pt_cnt); pt_cnt = 0; }
+	    continue;
+	}
+	pts[pt_cnt].x = F2P(x);
+	pts[pt_cnt].y = F2P(y);
+	pt_cnt++;
 	if(x > width) break;
     }
-    cairo_stroke(ctx);
+    printf("draw(%p, %p, pts, %d)\n", drw, gc, pt_cnt);
+    if(pt_cnt)
+	gdk_draw_lines(drw, gc, pts, pt_cnt);
+
     Py_RETURN_NONE;
 }
 #endif
 
 PyMethodDef module_methods[] = {
-#ifdef HAVE_PYCAIRO
-    {"draw_trace_cairo", draw_trace_cairo, METH_VARARGS,
+#ifdef HAVE_PYGTK
+    {"draw_trace", draw_trace, METH_VARARGS,
 	"Draw a trace to a cairo context"},
 #endif
     {0},
@@ -753,10 +839,6 @@ void initscope2(void) {
 
     PyType_Ready(&scopeobject_type);
     PyModule_AddObject(m, "Scope", (PyObject*)&scopeobject_type);
-
-#ifdef HAVE_PYCAIRO
-    Pycairo_IMPORT;
-#endif
 
     PyModule_AddIntConstant(m, "HAL_BIT", HAL_BIT);
     PyModule_AddIntConstant(m, "HAL_FLOAT", HAL_FLOAT);

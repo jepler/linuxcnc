@@ -172,13 +172,13 @@ $(sort $(call TODEPS, $(filter %.cc,$(USERSRCS)))): depends/%.d: %.cc
 $(sort $(call TODEPS, $(filter %.c,$(USERSRCS)))): depends/%.d: %.c 
 	@mkdir -p $(dir $@)
 	$(ECHO) Depending $<
-	@$(call DEP,$(CC),$@ $(patsubst depends/%.d,objects/%.o,$@),$@,$(CFLAGS) $(EXTRAFLAGS) $<)
+	$(call DEP,$(CC),$@ $(patsubst depends/%.d,objects/%.o,$@),$@,$(CFLAGS) $(EXTRAFLAGS) $<)
 
 # Rules to make .o (object) files
 $(sort $(CUSEROBJS)) : objects/%.o: %.c
 	$(ECHO) Compiling $<
 	@mkdir -p $(dir $@)
-	@$(CC) -c $(CFLAGS) $(EXTRAFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $(EXTRAFLAGS) $< -o $@
 
 $(sort $(CXXUSEROBJS)) : objects/%.o: %.cc
 	$(ECHO) Compiling $<

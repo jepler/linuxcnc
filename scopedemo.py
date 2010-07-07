@@ -125,72 +125,20 @@ class Trace:
     def kill_cache(self):
 	self.cache = None
 
-    def draw(self, canvas, xo, width, height):
-	canvas.save()
-
+    def draw(self, drw, xo, width, height):
 	scale = height / self.vscale / 10.
 	voff = -self.voff*height/10.
-	canvas.set_line_width(1)
-	canvas.set_source_rgba(.8, .8, .8)
-	canvas.move_to(0, height+voff)
-	canvas.line_to(width, height+voff)
-	canvas.stroke()
+
+	gc = drw.new_gc()
+	gc.set_rgb_fg_color(gtk.gdk.Color(208, 208, 208))
+	drw.draw_line(gc, 0, int(round(height+voff)), width, int(round(height+voff)))
+
 	samples_per_pixel = 10. / self.hscale / width
 
 	print samples_per_pixel
-	try:
-	    draw_trace_cairo(canvas, self.data, xo, samples_per_pixel, width, height, scale, voff, *self.color)
-	finally:
-	    canvas.restore()
+	gc.set_rgb_fg_color(gtk.gdk.Color(*[int(round(c*255)) for c in self.color]))
+	draw_trace(drw, gc, self.data, xo, samples_per_pixel, width, height, scale, voff, *self.color)
        
-
-    def draw_dense(self, canvas, xo, width, height, scale, voff):
-	cache = self.cache
-	if xo > 0: r = range(width)
-	else: r = range(-xo, width)
-
-	self.set_color(canvas, .80)
-	for row in r:
-	    crow = row + xo
-	    if crow >= len(cache): break
-	    data = cache[crow]
-	    canvas.move_to(row, height-data[1]*scale+voff)
-	    canvas.line_to(row, height-data[2]*scale+voff)
-	canvas.stroke()
-
-	self.set_color(canvas, .80)
-	for row in r:
-	    crow = row + xo
-	    if crow >= len(cache): break
-	    data = cache[crow]
-	    if row == r[0]:
-		canvas.move_to(row, height-data[0]*scale+voff)
-	    else:
-		canvas.line_to(row, height-data[0]*scale+voff)
-	canvas.stroke()
-
-    def draw_sparse(self, canvas, xo, width, height, scale, voff):
-	cache = self.cache
-	first = True
-
-	self.set_color(canvas, .80)
-	for x, y in cache:
-	    if x < xo: continue
-	    if x > xo+width: break
-
-	    if first:
-		first = False
-		canvas.move_to(x, height-y*scale+voff)
-	    else:
-		canvas.line_to(x, height-y*scale+voff)
-	canvas.stroke()
-
-    def set_color(self, canvas, alpha):
-	r, g, b = self.color
-	canvas.set_source_rgba(r*alpha, g*alpha, b*alpha, alpha)
-
-
-
 class Ddt(Trace):
     def __init__(self, base, *args):
 	Trace.__init__(self, *args)
@@ -225,52 +173,42 @@ period = cap.get_thread_period()
 fperiod = period*1.e-9
 rfperiod = 1./fperiod
 
-def draw_reticle(canvas, width, height):
-    d = .01 * min(width, height)
-    canvas.set_line_width(2)
+def draw_reticle(drw, width, height):
+    d = int(round(.01 * min(width, height)))
+    gc_bright = drw.new_gc()
+    gc_bright.set_rgb_fg_color(gtk.gdk.Color(208, 208, 208))
+    gc_dim = drw.new_gc()
+    gc_dim.set_rgb_fg_color(gtk.gdk.Color(72, 72, 72))
+    #gc.set_line_attributes(2, gtk.gdk.LINE_SOLID, gtk.gdk.CAP_BUTT, gtk.gdk.JOIN_MITER);
     for row in range(11):
 	for col in range(11):
-	    x = width * col / 10.
-	    y = height * row / 10.
+	    x = int(round(width * col / 10.))
+	    y = int(round(height * row / 10.))
 	    if row == 5 or col == 5:
-		canvas.set_source_rgba(.8, .8, .8)
+		gc = gc_bright
 	    else:
-		canvas.set_source_rgba(.3, .3, .3)
-	    canvas.move_to(x-d, y)
-	    canvas.line_to(x+d, y)
-	    canvas.move_to(x, y-d)
-	    canvas.line_to(x, y+d)
-	    canvas.stroke()
+		gc = gc_dim
+	    drw.draw_line(gc, x-d, y, x+d, y)
+	    drw.draw_line(gc, x, y-d, x, y+d)
 
-    canvas.set_source_rgba(.1, .1, .1)
-    d = d / 3.
-    if height > 500:
+    if height > 200:
 	for col in range(11):
 	    for row in range(101):
-		x = width * col / 10.
-		y = height * row / 100.
-		canvas.move_to(x-d, y)
-		canvas.line_to(x+d, y)
+		x = int(round(round(width * col / 10.)))
+		y = int(round(round(height * row / 100.)))
+		drw.draw_point(gc_dim, x, y)
 
-    canvas.set_line_width(1)
-    if width > 500:
+    if width > 200:
 	for col in range(101):
 	    for row in range(11):
-		x = width * col / 100.
-		y = height * row / 10.
-		canvas.move_to(x, y-d)
-		canvas.line_to(x, y+d)
-    canvas.stroke()
+		x = int(round(width * col / 100.))
+		y = int(round(height * row / 10.))
+		drw.draw_point(gc_dim, x, y)
 
-def draw_traces_to_canvas(canvas, traces, width, height):
-    canvas.set_source_rgb(0,0,0)
-    canvas.set_operator(cairo.OPERATOR_SOURCE)
-    canvas.paint()
-
-    canvas.set_operator(cairo.OPERATOR_ADD)
-    draw_reticle(canvas, width, height)
+def draw_traces_to_drawable(drw, traces, width, height):
+    draw_reticle(drw, width, height)
     for t in traces:
-	t.draw(canvas, 0, width, height)
+	t.draw(drw, 0, width, height)
 
 class Screen(gtk.DrawingArea):
 
@@ -279,19 +217,11 @@ class Screen(gtk.DrawingArea):
 
     # Handle the expose-event by drawing
     def do_expose_event(self, event):
+	d = self.get_window()
+	self.draw(d, *self.window.get_size())
 
-	# Create the cairo context
-	cr = self.window.cairo_create()
-
-	# Restrict Cairo to the exposed area; avoid extra work
-	cr.rectangle(event.area.x, event.area.y,
-		event.area.width, event.area.height)
-	cr.clip()
-
-	self.draw(cr, *self.window.get_size())
-
-    def draw(self, cr, width, height):
-	draw_traces_to_canvas(cr, traces, width, height)
+    def draw(self, d, width, height):
+	draw_traces_to_drawable(d, traces, width, height)
 
 w = gtk.Window()
 w.connect("destroy", gtk.main_quit)
