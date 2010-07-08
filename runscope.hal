@@ -15,7 +15,7 @@ setp stepgen.0.velocity-cmd 1
 start
 
 #loadusr -w valgrind --suppressions=valgrind-python.supp python scopedemo.py
-loadusr -w gdb --args python scopedemo.py
+#loadusr -w gdb --args python scopedemo.py
 #loadusr -w perf record -f python scopedemo.py
 #loadusr -w python -mprofile scopedemo.py
-#loadusr -w python scopedemo.py
+loadusr -w python scopedemo.py

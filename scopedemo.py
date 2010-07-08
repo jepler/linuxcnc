@@ -33,6 +33,7 @@ class Capture:
 	self.channels[channel] = weakref.proxy(trace, lambda unused: self.free_channel(channel))
 	
     def free_channel(self, channel):
+	print "free_channel", channel
 	del self.channels[channel]
 	self.s.channel_off(channel)
 
@@ -57,7 +58,7 @@ class Capture:
     def poll(self):
 	assert self.capture_state(), "must be capturing to poll"
 	new_samples, overruns = self.s.get_samples()
-	print "poll()", new_samples, overruns
+#	print "poll()", new_samples, overruns
 	return new_samples
 
     def check_overflow(self):
@@ -130,13 +131,13 @@ class Trace:
 	voff = -self.voff*height/10.
 
 	gc = drw.new_gc()
-	gc.set_rgb_fg_color(gtk.gdk.Color(208, 208, 208))
+	gc.set_rgb_fg_color(gtk.gdk.Color('#ccc'))
 	drw.draw_line(gc, 0, int(round(height+voff)), width, int(round(height+voff)))
 
 	samples_per_pixel = 10. / self.hscale / width
 
-	print samples_per_pixel
-	gc.set_rgb_fg_color(gtk.gdk.Color(*[int(round(c*255)) for c in self.color]))
+#	print samples_per_pixel
+	gc.set_rgb_fg_color(gtk.gdk.Color(*[int(round(c*65535)) for c in self.color]))
 	draw_trace(drw, gc, self.data, xo, samples_per_pixel, width, height, scale, voff, *self.color)
        
 class Ddt(Trace):
@@ -161,7 +162,7 @@ class Ddt(Trace):
 	self.kill_cache()
 
 cap = Capture()
-print cap.s.list_pins()
+#print cap.s.list_pins()
 t1 = Trace(.002, 1., 1., (1,0,0)); cap.add_pin(t1, 'stepgen.0.phase-A')
 t2 = Trace(.002, 1., 4., (0,1,0)); cap.add_pin(t2, 'siggen.0.sine')
 t3 = Trace(.002, 1., 4., (0,0,1)); cap.add_pin(t3, 'siggen.0.cosine')
@@ -176,9 +177,9 @@ rfperiod = 1./fperiod
 def draw_reticle(drw, width, height):
     d = int(round(.01 * min(width, height)))
     gc_bright = drw.new_gc()
-    gc_bright.set_rgb_fg_color(gtk.gdk.Color(208, 208, 208))
+    gc_bright.set_rgb_fg_color(gtk.gdk.Color('#ccc'))
     gc_dim = drw.new_gc()
-    gc_dim.set_rgb_fg_color(gtk.gdk.Color(72, 72, 72))
+    gc_dim.set_rgb_fg_color(gtk.gdk.Color('#222'))
     #gc.set_line_attributes(2, gtk.gdk.LINE_SOLID, gtk.gdk.CAP_BUTT, gtk.gdk.JOIN_MITER);
     for row in range(11):
 	for col in range(11):
@@ -227,6 +228,8 @@ w = gtk.Window()
 w.connect("destroy", gtk.main_quit)
 screen = Screen()
 screen.set_size_request(640,480)
+screen.modify_bg(state=0, color=gtk.gdk.Color('#000'))
+screen.set_double_buffered(1)
 w.add(screen)
 w.show_all()
 
@@ -234,11 +237,12 @@ def painter():
     if cap.poll():
 	for t in traces: t.update()
 	for t in traces: t.expire_samples(5000)
-	for t in traces: print t.data[-1],
-	print
+#	for t in traces: print t.data[-1],
+#	print
 	screen.queue_draw()
     return True
 gobject.timeout_add(50, painter)
+#gobject.idle_add(painter)
 
 gtk.main()
 

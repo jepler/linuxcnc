@@ -671,7 +671,7 @@ int get_gdk_gc(PyObject *pygc, void *_gc) {
     if(!PyObject_IsInstance(pygc, get_gdk_gc_type())) return 0;
     *gc = GDK_GC(pygobject_get(pygc));
 
-    printf("gc->%p\n", *gc);
+    //printf("gc->%p\n", *gc);
     assert(gc);
     assert(*gc);
     return *gc ? 1 : 0;
@@ -791,11 +791,16 @@ PyObject *draw_trace(PyObject *self, PyObject *args) {
     GdkGC *gc;
     GdkPoint *pts;
     int pt_cnt;
-    int xo, width, height, sa;
-    double scale, voff, r, g, b, spp, pps;
+    int width, height, sa;
+    double xo, scale, voff, r, g, b, spp, pps;
     struct pyarrayinfo arr;
     
-    if(!PyArg_ParseTuple(args, "O&O&O&ddiiddddd", get_gdk_drawable, &drw, get_gdk_gc, &gc, get_array, &arr, &xo, &spp, &width, &height, &scale, &voff, &r, &g, &b))
+    if(!PyArg_ParseTuple(args, "O&O&O&"
+	"ddiiddddd",
+	get_gdk_drawable, &drw,
+	get_gdk_gc, &gc,
+	get_array, &arr,
+	&xo, &spp, &width, &height, &scale, &voff, &r, &g, &b))
 	return 0;
     assert(gc);
 
@@ -805,7 +810,7 @@ PyObject *draw_trace(PyObject *self, PyObject *args) {
     for(sa=first_sample(spp, xo); sa<arr.nelem; sa++) {
 	double x = sa * pps - xo, y = height - get_sample(&arr, sa) * scale + voff;
 	if(isnan(y)) {
-	    printf("draw(%p, %p, pts, %d)\n", drw, gc, pt_cnt);
+	    //printf("draw(%p, %p, %p, %d)\n", drw, gc, pts, pt_cnt);
 	    if(pt_cnt) { gdk_draw_lines(drw, gc, pts, pt_cnt); pt_cnt = 0; }
 	    continue;
 	}
@@ -814,7 +819,7 @@ PyObject *draw_trace(PyObject *self, PyObject *args) {
 	pt_cnt++;
 	if(x > width) break;
     }
-    printf("draw(%p, %p, pts, %d)\n", drw, gc, pt_cnt);
+    //printf("draw(%p, %p, %p, %d)\n", drw, gc, pts, pt_cnt);
     if(pt_cnt)
 	gdk_draw_lines(drw, gc, pts, pt_cnt);
 
