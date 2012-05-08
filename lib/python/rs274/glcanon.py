@@ -24,6 +24,9 @@ import linuxcnc
 import array
 import gcode
 
+def minmax(*args):
+    return min(*args), max(*args)
+
 homeicon = array.array('B',
         [0x2, 0x00,   0x02, 0x00,   0x02, 0x00,   0x0f, 0x80,
         0x1e, 0x40,   0x3e, 0x20,   0x3e, 0x20,   0x3e, 0x20,
@@ -82,6 +85,7 @@ class GLCanon(Translated, ArcsToSegmentsMixin):
         self.is_foam = is_foam
         self.foam_z = 0
         self.foam_w = 1.5
+        self.grid = 5.0
         self.notify = 0
         self.notify_message = ""
 
@@ -108,6 +112,14 @@ class GLCanon(Translated, ArcsToSegmentsMixin):
                             self.foam_w = self.foam_w / 25.4
                     except:
                         self.foam_w = 30.0
+            if command == "GRID":
+                if len(parts) > 2 :
+                    try:
+                        self.grid = float(parts[2])
+                        if 210 in self.state.gcodes:
+                            self.grid = self.grid / 25.4
+                    except:
+                        self.grid = 5.0/25.4
             if command == "notify":
                 self.notify = self.notify + 1
                 self.notify_message = "(AXIS,notify):" + str(self.notify)
@@ -782,6 +794,105 @@ class GlCanonDraw:
         if self.canon: return self.canon.foam_w
         return 1.5
 
+    def get_grid(self):
+        if self.canon and self.canon.grid: return self.canon.grid
+        return 5./25.4
+
+    def comp(self, (sx, sy), (cx, cy)):
+        return -(sx*cx + sy*cy) / (sx*sx + sy*sy)
+
+    def param(self, (x1, y1), (dx1, dy1), (x3, y3), (dx3, dy3)):
+        den = (dy3)*(dx1) - (dx3)*(dy1)
+        if den == 0: return 0
+        num = (dx3)*(y1-y3) - (dy3)*(x1-x3)
+        return num * 1. / den
+
+    def draw_grid_lines(self, space, (ox, oy), (dx, dy), lim_min, lim_max):
+        # draw a series of line segments of the form
+        #   dx(x-ox) + dy(y-oy) + k*space = 0
+        # for integers k that intersect the AABB [lim_min, lim_max]
+        lim_pts = [
+                (lim_min[0], lim_min[1]),
+                (lim_max[0], lim_min[1]),
+                (lim_min[0], lim_max[1]),
+                (lim_max[0], lim_max[1])]
+        od = self.comp((dy, -dx), (ox, oy))
+        d0, d1 = minmax(*(self.comp((dy, -dx), i)-od for i in lim_pts))
+        k0 = int(math.ceil(d0/space))
+        k1 = int(math.floor(d1/space))
+        delta = (dx, dy)
+        for k in range(k0, k1+1):
+            d = k*space
+            # Now we're drawing the line dx(x-ox) + dx(y-oy) + d = 0
+            p0 = (ox - dy * d, oy + dx * d)
+            # which is the same as the line p0 + u * delta
+
+            # but we only want the part that's inside the box lim_pts...
+            if dx and dy:
+                times = [
+                        self.param(p0, delta, lim_min[:2], (0, 1)),
+                        self.param(p0, delta, lim_min[:2], (1, 0)),
+                        self.param(p0, delta, lim_max[:2], (0, 1)),
+                        self.param(p0, delta, lim_max[:2], (1, 0))]
+                times.sort()
+                t0, t1 = times[1], times[2] # Take the middle two times
+            elif dx:
+                times = [
+                        self.param(p0, delta, lim_min[:2], (0, 1)),
+                        self.param(p0, delta, lim_max[:2], (0, 1))]
+                times.sort()
+                t0, t1 = times[0], times[1] # Take the only two times
+            else:
+                times = [
+                        self.param(p0, delta, lim_min[:2], (1, 0)),
+                        self.param(p0, delta, lim_max[:2], (1, 0))]
+                times.sort()
+                t0, t1 = times[0], times[1] # Take the only two times
+            x0, y0 = p0[0] + delta[0]*t0, p0[1] + delta[1]*t0
+            x1, y1 = p0[0] + delta[0]*t1, p0[1] + delta[1]*t1
+            xm, ym = (x0+x1)/2, (y0+y1)/2
+            # The computation of k0 and k1 above should mean that
+            # the lines are always in the limits, but I observed
+            # that this wasn't always the case...
+            #if xm < lim_min[0] or xm > lim_max[0]: continue
+            #if ym < lim_min[1] or ym > lim_max[1]: continue
+            glVertex3f(x0, y0, lim_min[2])
+            glVertex3f(x1, y1, lim_min[2])
+
+    def draw_grid(self):
+        grid_space=self.get_grid()
+        glLineWidth(1)
+        glColor3f(.25, .25, .25)
+        lim_min, lim_max = self.soft_limits()
+        lim_pts = (
+                (lim_min[0], lim_min[1]),
+                (lim_max[0], lim_min[1]),
+                (lim_min[0], lim_max[1]),
+                (lim_max[0], lim_max[1]))
+        s = self.stat
+        g5x_offset = self.to_internal_units(s.g5x_offset)[:2]
+        rotation = math.radians(s.rotation_xy % 90)
+        g92_offset = self.to_internal_units(s.g92_offset)[:2]
+        if self.get_show_relative():
+            cos_rot = math.cos(rotation)
+            sin_rot = math.sin(rotation)
+            offset = (
+                    g5x_offset[0] + g92_offset[0] * cos_rot
+                                  - g92_offset[1] * sin_rot,
+                    g5x_offset[1] + g92_offset[0] * sin_rot
+                                  + g92_offset[1] * cos_rot)
+        else:
+            offset = 0., 0.
+            cos_rot = 1.
+            sin_rot = 0.
+        glBegin(GL_LINES)
+        self.draw_grid_lines(grid_space, offset, (cos_rot, sin_rot),
+                lim_min, lim_max)
+        self.draw_grid_lines(grid_space, offset, (sin_rot, -cos_rot),
+                lim_min, lim_max)
+        glEnd()
+
+
     def redraw(self):
         s = self.stat
         s.poll()
@@ -791,6 +902,8 @@ class GlCanonDraw:
         glDisable(GL_LIGHTING)
         glMatrixMode(GL_MODELVIEW)
 
+        if (self.get_view() == 2) and (self.get_show_grid()) :
+            self.draw_grid()
         if self.get_show_program():
             if self.get_program_alpha():
                 glDisable(GL_DEPTH_TEST)

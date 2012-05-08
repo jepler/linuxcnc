@@ -531,6 +531,7 @@ class MyOpengl(GlCanonDraw, Opengl):
     def get_show_program(self): return vars.show_program.get()
     def get_show_offsets(self): return vars.show_offsets.get()
     def get_show_extents(self): return vars.show_extents.get()
+    def get_show_grid(self): return vars.show_grid.get()
     def get_show_metric(self): return vars.metric.get()
     def get_show_live_plot(self): return vars.show_live_plot.get()
     def get_show_machine_speed(self): return vars.show_machine_speed.get()
@@ -2210,6 +2211,10 @@ class TclCommands(nf.TclCommands):
         ap.putpref("show_offsets", vars.show_offsets.get())
         o.tkRedraw()
 
+    def toggle_show_grid(*event):
+        ap.putpref("show_grid", vars.show_grid.get())
+        o.tkRedraw()
+
     def toggle_show_machine_limits(*event):
         ap.putpref("show_machine_limits", vars.show_machine_limits.get())
         o.tkRedraw()
@@ -2525,6 +2530,7 @@ vars = nf.Variables(root_window,
     ("show_tool", IntVar),
     ("show_extents", IntVar),
     ("show_offsets", IntVar),
+    ("show_grid", IntVar),
     ("show_machine_limits", IntVar),
     ("show_machine_speed", IntVar),
     ("show_distance_to_go", IntVar),
@@ -2566,6 +2572,7 @@ vars.show_live_plot.set(ap.getpref("show_live_plot", True))
 vars.show_tool.set(ap.getpref("show_tool", True))
 vars.show_extents.set(ap.getpref("show_extents", True))
 vars.show_offsets.set(ap.getpref("show_offsets", True))
+vars.show_grid.set(ap.getpref("show_grid", True))
 vars.show_machine_limits.set(ap.getpref("show_machine_limits", True))
 vars.show_machine_speed.set(ap.getpref("show_machine_speed", True))
 vars.show_distance_to_go.set(ap.getpref("show_distance_to_go", False))

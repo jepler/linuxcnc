@@ -338,6 +338,11 @@ setup_menu_accel .menu.view end [_ "Show too_l"]
 setup_menu_accel .menu.view end [_ "Show e_xtents"]
 
 .menu.view add checkbutton \
+	-variable show_grid \
+	-command toggle_show_grid
+setup_menu_accel .menu.view end [_ "Show grid"]
+
+.menu.view add checkbutton \
 	-variable show_offsets \
 	-command toggle_show_offsets
 setup_menu_accel .menu.view end [_ "Show o_ffsets"]
