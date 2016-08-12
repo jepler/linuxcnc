@@ -22,6 +22,8 @@
 # 3 =          left zoom,   middle rotate, right move
 # 4 =          left move,   middle zoom,   right rotate
 # 5 =          left rotate, middle zoom,   right move
+# 2015 Moses McKnight introduced mode 6 
+# 6 = left move, middle zoom, right zoom (no rotate - for 2D plasma machines or lathes)
 
 import os
 import gtk, gobject
@@ -203,13 +205,7 @@ class HAL_Gremlin(gremlin.Gremlin, _EMC_ActionBase):
                     droposstrs.append(rotformat % ("TLO", a, tlo_offset[i]))
 
             # if its a lathe only show radius or diameter as per property
-            # we have to adjust the homing icon to line up:
             if self.is_lathe():
-                if homed[0]:
-                    homed.pop(0)
-                    homed.pop(0)
-                    homed.insert(0,1)
-                    homed.insert(0,0)
                 posstrs[0] = ""
                 if self.show_lathe_radius:
                     posstrs.insert(1, format % ("Rad", positions[0]))

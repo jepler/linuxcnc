@@ -22,7 +22,7 @@
 #include <boost/python/object.hpp>
 
 #pragma GCC diagnostic error "-Wmissing-field-initializers"
-setup_struct::setup_struct() :
+setup::setup() :
     AA_axis_offset(0.0),
     AA_current(0.0),
     AA_origin_offset(0.0),
@@ -165,9 +165,9 @@ setup_struct::setup_struct() :
     b_axis_wrapped(0),
     c_axis_wrapped(0),
 
-    a_indexer(0),
-    b_indexer(0),
-    c_indexer(0),
+    a_indexer_jnum(0),
+    b_indexer_jnum(0),
+    c_indexer_jnum(0),
 
     lathe_diameter_mode(0),
     mdi_interrupt(0),

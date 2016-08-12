@@ -71,6 +71,7 @@ class _GStat(gobject.GObject):
         'state-estop-reset': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'state-on': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'state-off': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+
         'homed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_STRING,)),
         'all-homed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'not-all-homed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_STRING,)),
@@ -80,7 +81,6 @@ class _GStat(gobject.GObject):
         'mode-mdi': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
 
         'interp-run': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
-
         'interp-idle': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'interp-paused': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'interp-reading': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
@@ -90,6 +90,7 @@ class _GStat(gobject.GObject):
         'reload-display': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
         'line-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
         'tool-in-spindle-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
+        'motion-mode-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
         }
 
     STATES = { linuxcnc.STATE_ESTOP:       'state-estop'
@@ -124,10 +125,15 @@ class _GStat(gobject.GObject):
         self.old['state'] = self.stat.task_state
         self.old['mode']  = self.stat.task_mode
         self.old['interp']= self.stat.interp_state
-        self.old['file']  = self.stat.file
+        # Only update file if call_level is 0, which
+        # means we are not executing a subroutine/remap
+        # This avoids emiting signals for bogus file names below 
+        if self.stat.call_level == 0:
+            self.old['file']  = self.stat.file
         self.old['line']  = self.stat.motion_line
         self.old['homed'] = self.stat.homed
         self.old['tool-in-spindle'] = self.stat.tool_in_spindle
+        self.old['motion-mode'] = self.stat.motion_mode
 
     def update(self):
         try:
@@ -165,7 +171,6 @@ class _GStat(gobject.GObject):
         interp_new = self.old['interp']
         if interp_new != interp_old:
             if not interp_old or interp_old == linuxcnc.INTERP_IDLE:
-                print "Emit", "interp-run"
                 self.emit('interp-run')
             self.emit(self.INTERP[interp_new])
 
@@ -174,14 +179,21 @@ class _GStat(gobject.GObject):
         if file_new != file_old:
             # if interpreter is reading or waiting, the new file
             # is a remap procedure, with the following test we
-            # do avoid that a signal is emited in that case, causing 
-            # a reload of the preview and sourceview widgets
+            # partly avoid emitting a signal in that case, which would cause 
+            # a reload of the preview and sourceview widgets.  A signal could
+            # still be emitted if aborting a program shortly after it ran an
+            # external file subroutine, but that is fixed by not updating the
+            # file name if call_level != 0 in the merge() function above.
             if self.stat.interp_state == linuxcnc.INTERP_IDLE:
                 self.emit('file-loaded', file_new)
 
         #ToDo : Find a way to avoid signal when the line changed due to 
         #       a remap procedure, because the signal do highlight a wrong
         #       line in the code
+        # I think this might be fixed somewhere, because I do not see bogus line changed signals
+        # when running an external file subroutine.  I tried making it not record line numbers when
+        # the call level is non-zero above, but then I was not getting nearly all the signals I should
+        # Moses McKnight
         line_old = old.get('line', None)
         line_new = self.old['line']
         if line_new != line_old:
@@ -192,30 +204,31 @@ class _GStat(gobject.GObject):
         if tool_new != tool_old:
             self.emit('tool-in-spindle-changed', tool_new)
 
+        motion_mode_old = old.get('motion-mode', None)
+        motion_mode_new = self.old['motion-mode']
+        if motion_mode_new != motion_mode_old:
+            self.emit('motion-mode-changed', motion_mode_new)
+
         # if the homed status has changed
-        # check number of homed axes against number of available axes
+        # check number of homed joints against number of available joints
         # if they are equal send the all-homed signal
-        # else not-all-homed (with a string of unhomed joint numbers)
-        # if a joint is homed send 'homed' (with a string of homed joint numbers)
-        homed_old = old.get('homed', None)
-        homed_new = self.old['homed']
-        if homed_new != homed_old:
-            axis_count = count = 0
-            unhomed = homed = ""
-            for i,h in enumerate(homed_new):
-                if h:
-                    count +=1
-                    homed += str(i)
-                if self.stat.axis_mask & (1<<i) == 0: continue
-                axis_count += 1
-                if not h:
-                    unhomed += str(i)
-            if count:
-                self.emit('homed',homed)
-            if count == axis_count:
+        # else send the not-all-homed signal (with a string of unhomed joint numbers)
+        # if a joint is homed send 'homed' (with a string of homed joint number)
+        homed_joint_old = old.get('homed', None)
+        homed_joint_new = self.old['homed']
+        if homed_joint_new != homed_joint_old:
+            homed_joints = 0
+            unhomed_joints = ""
+            for joint in range(0, self.stat.joints):
+                if self.stat.homed[joint]:
+                    homed_joints += 1
+                    self.emit('homed', joint)
+                else:
+                    unhomed_joints += str(joint)
+            if homed_joints == self.stat.joints:
                 self.emit('all-homed')
             else:
-                self.emit('not-all-homed',unhomed)
+                self.emit('not-all-homed', unhomed_joints)
 
         return True
 

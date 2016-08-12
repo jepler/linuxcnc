@@ -18,7 +18,7 @@
 #         reduce subroutine parm name lengths and/or comment string length
 
 #------------------------------------------------------------------------------
-# Copyright: 2013-4
+# Copyright: 2013-6
 # Author:    Dewey Garrett <dgarrett@panix.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -2147,6 +2147,9 @@ class ControlPanel():
         intfc = self.mypg.nset.intfc
 
         global g_gcmc_exe
+        if g_gcmc_exe is None:
+            if not find_gcmc():
+                return False ;# fail
         xcmd = []
         xcmd.append(g_gcmc_exe)
 
@@ -3385,9 +3388,8 @@ Options requiring values:
     [-p | --preamble      preamble_filename]
     [-P | --postamble     postamble_filename]
     [-i | --ini           inifile_name]
-    [-a | --autofile      autoauto_filename]
+    [-a | --autofile      auto_filename]
     [-t | --test          testno]
-    [-H | --height        height_of_entry widget] (typ 20-40)
     [-K | --keyboardfile  glade_file] (use custom popupkeyboard glade file)
 Solo Options:
     [-v | --verbose]
@@ -3402,7 +3404,7 @@ Notes:
       One set of files can be specified from cmdline.
       Multiple sets of files can be specified from an inifile.
       If --ini is NOT specified:
-         search for a running linuxcnc and use it's inifile
+         search for a running linuxcnc and use its inifile
     """ % g_progname)
 #-----------------------------------------------------------------------------
 # Standalone (and demo) usage:
