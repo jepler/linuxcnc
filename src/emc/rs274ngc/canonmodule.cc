@@ -16,6 +16,8 @@
  *    along with this program; if not, write to the Free Software
  *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
+#undef BOOST_PYTHON_MAX_ARITY
+#define BOOST_PYTHON_MAX_ARITY 13
 #include <boost/python/def.hpp>
 #include <boost/python/module.hpp>
 #include <boost/python/scope.hpp>
