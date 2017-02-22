@@ -4,4 +4,5 @@ sudo apt-get install -y devscripts equivs build-essential --no-install-recommend
 debian/configure uspace
 mk-build-deps
 sudo dpkg -i linuxcnc-*.deb || true
+echo; echo "***** debian/control *****"; cat debian/control; echo "*****"; echo
 sudo apt-get -f install -y --no-install-recommends
