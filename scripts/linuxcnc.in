@@ -648,7 +648,7 @@ function Cleanup() {
 
 # Name of lock file to check for that signifies that LinuxCNC is up,
 # to prevent multiple copies of controller
-LOCKFILE=/tmp/linuxcnc.lock
+LOCKFILE=${LINUXCNC_LOCKFILE-/tmp/linuxcnc.lock}
 
 # Check for lock file
 if [ -f $LOCKFILE ]; then
