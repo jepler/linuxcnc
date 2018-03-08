@@ -85,6 +85,9 @@ run_without_overruns () {
 }
 
 TMPDIR=`mktemp -d /tmp/runtest.XXXXXX`
+export LINUXCNC_LOCKFILE="$TMPDIR/linuxcnc.lock"
+export RTAPI_FIFO_PATH="$TMPDIR/rtapi_fifo"
+
 trap "rm -rf $TMPDIR" 0 1 2 3 9 15
 
 
