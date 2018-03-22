@@ -4,3 +4,7 @@ before_install: ./scripts/travis-install-build-deps.sh
 script: ./scripts/travis-build-test.sh
 notifications:
     email: false
+env:
+#    - TRAVIS_TARGET=uspace
+    - TRAVIS_TARGET=rtai
+#    - TRAVIS_TARGET=docs
