@@ -34,7 +34,6 @@ extern "C" {
 #endif
 #include "cms.hh"		/* class CMS */
 #include "cms_up.hh"		/* class CMS_UPDATER */
-#include "cms_xup.hh"		/* class CMS_XDR_UPDATER */
 #include "cms_aup.hh"		/* class CMS_ASCII_UPDATER */
 #include "cms_dup.hh"		/* class CMS_DISPLAY_ASCII_UPDATER */
 #include "rcs_print.hh"		/* rcs_print_error(), separate_words() */
@@ -667,10 +666,10 @@ void CMS::open(void)
     }
     if (isserver || neutral || ((ProcessType == CMS_REMOTE_TYPE) && !force_raw)) {
 	switch (neutral_encoding_method) {
-	case CMS_XDR_ENCODING:
-	    updater = new CMS_XDR_UPDATER(this);
-	    break;
-
+        case CMS_XDR_ENCODING:
+	    rcs_print_error("CMS: Invalid encoding method(%d) - using ASCII instead\n",
+		neutral_encoding_method);
+            /* FALLTHROUGH */
 	case CMS_ASCII_ENCODING:
 	    updater = new CMS_ASCII_UPDATER(this);
 	    break;
@@ -1111,10 +1110,10 @@ void CMS::set_temp_updater(CMS_NEUTRAL_ENCODING_METHOD temp_encoding_method)
     }
     if (NULL == temp_updater) {
 	switch (temp_encoding_method) {
-	case CMS_XDR_ENCODING:
-	    temp_updater = new CMS_XDR_UPDATER(this);
-	    break;
-
+        case CMS_XDR_ENCODING:
+	    rcs_print_error("CMS: Invalid encoding method(%d) - using ASCII instead\n",
+		neutral_encoding_method);
+            /* FALLTHROUGH */
 	case CMS_ASCII_ENCODING:
 	    temp_updater = new CMS_ASCII_UPDATER(this);
 	    break;
