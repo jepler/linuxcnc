@@ -9,19 +9,23 @@ on:
     types: [rerequested]
 
 jobs:
-  main:
+  uspace-docker:
+    strategy:
+        matrix:
+            imgname:
+                - debian:buster
     runs-on: ubuntu-16.04
+    container: ${{ matrix.imgname }}
     steps:
+    - run: apt-get update && apt-get -y --no-install-recommends install git ca-certificates sudo curl gnupg
     - name: Dump GitHub context
       env:
         GITHUB_CONTEXT: ${{ toJson(github) }}
       run: echo "$GITHUB_CONTEXT"
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v1
       with:
-        submodules: true
         fetch-depth: 0
-    - run: git fetch --recurse-submodules=no https://github.com/linuxcnc/linuxcnc refs/tags/*:refs/tags/*
-    - run: ./scripts/travis-install-build-deps.sh
-    - run: ./scripts/travis-build-test.sh
-    
-
+    - run: cp share/linuxcnc/linuxcnc.asc /etc/apt/trusted.gpg.d/linuxcnc.asc
+    - run: git fetch --tags https://github.com/linuxcnc/linuxcnc
+    - name: build in docker
+      run: env REALTIME=uspace ./scripts/travis-install-build-deps.sh && ./scripts/travis-build-test.sh
